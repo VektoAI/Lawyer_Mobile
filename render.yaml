@@ -1,17 +1,11 @@
-# Render Blueprint — Case Vault
+# Render Blueprint — backend API only (munshi-api)
 #
-# Services:
-#   munshi-api       FastAPI backend (auth, courts, cron) — used by APK + web
-#   casevault-web    Flutter web build served by nginx (optional browser access)
+# Repo: https://github.com/omkar-vekto/Lawyer_Mobile
+# Flutter APK is built locally — not deployed on Render.
 #
-# Deploy: push repo → Render Dashboard → New Blueprint → select repo → Apply
-# Then set secret env vars in the dashboard (see DEPLOY.md).
-#
-# APK is built locally (not on Render):
-#   .\scripts\build-apk.ps1 -ApiBase https://munshi-api.onrender.com
+# After Blueprint Apply, set secrets in Render dashboard (see DEPLOY.md).
 
 services:
-  # ── Backend API (primary) ─────────────────────────────────────────────────
   - type: web
     name: munshi-api
     runtime: docker
@@ -27,18 +21,16 @@ services:
         value: "0"
       - key: MUNSHI_OPENAPI
         value: "0"
-      # Must match this service URL — email confirm links land here.
+      # NOT a web frontend — legacy env name. Set to this same backend URL (mobile-only deploy).
       - key: MUNSHI_FRONTEND_URL
         value: https://munshi-api.onrender.com
+      # Deep link opened by the Android app after email verification.
       - key: MUNSHI_MOBILE_AUTH_REDIRECT
         value: casevault://auth/confirm
       - key: MUNSHI_CORS_ORIGINS
-        value: https://casevault-web.onrender.com,http://127.0.0.1:4173,http://localhost:4173
+        value: http://127.0.0.1:4173,http://localhost:4173
       - key: PYTHONUNBUFFERED
         value: "1"
-      # Optional: mount a persistent disk in Render dashboard at /data, then set MUNSHI_DATA_DIR=/data
-      - key: MUNSHI_DATA_DIR
-        value: /data
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_ANON_KEY
@@ -51,18 +43,3 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-
-  # ── Flutter web (browser) ─────────────────────────────────────────────────
-  - type: web
-    name: casevault-web
-    runtime: docker
-    dockerfilePath: ./Dockerfile.web
-    plan: free
-    region: singapore
-    healthCheckPath: /
-    autoDeploy: true
-    envVars:
-      - key: MUNSHI_API_BASE
-        value: https://munshi-api.onrender.com
-      - key: PYTHONUNBUFFERED
-        value: "1"

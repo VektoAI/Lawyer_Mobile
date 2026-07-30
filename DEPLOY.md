@@ -1,108 +1,98 @@
-# Deploying to Render (backend + web)
+# Deploy backend only → build APK → test on phone
 
-This repo deploys **two** Render services from `render.yaml`:
+**Render:** backend API only  
+**Phone:** Flutter APK only (no web app)
 
-| Service | URL (default) | Purpose |
-|---------|---------------|---------|
-| **munshi-api** | `https://munshi-api.onrender.com` | FastAPI backend — auth, courts, cron |
-| **casevault-web** | `https://casevault-web.onrender.com` | Flutter web app (browser) |
-
-The **Android APK is built locally** (not on Render). See `BUILD.md` and `scripts/build-apk.ps1`.
-
-Case data stays encrypted on the device — the server never stores cases.
+Repo: **https://github.com/omkar-vekto/Lawyer_Mobile**
 
 ---
 
-## 1. Push to GitHub
+## Plan
 
-```powershell
-cd c:\Users\omkar\Documents\vekto\casevault
-git add .
-git commit -m "Render deploy: API + web"
-git push origin main
+1. Deploy **backend** on Render (you do this now)
+2. Send me your live Render URL (e.g. `https://munshi-api.onrender.com`)
+3. We build the APK with that URL baked in
+4. Install on your phone and test sign-up, login, courts, etc.
+
+---
+
+## Important: `MUNSHI_FRONTEND_URL` is NOT a web app
+
+The name is confusing. **There is no web frontend on Render.**
+
+For **mobile-only**, set:
+
+```
+MUNSHI_FRONTEND_URL = same as your backend Render URL
 ```
 
-## 2. Apply Render Blueprint
+Example: if backend is `https://munshi-api.onrender.com`, then:
 
-1. [render.com](https://render.com) → **New +** → **Blueprint**
-2. Connect your GitHub repo
-3. **Apply** — creates `munshi-api` and `casevault-web`
+```
+MUNSHI_FRONTEND_URL=https://munshi-api.onrender.com
+```
 
-## 3. Set secrets (munshi-api service → Environment)
+It is a legacy variable (from an old browser UI). The app on your phone uses **`MUNSHI_API_BASE`** at APK build time — that is the only URL that matters for the mobile app.
 
-These are marked `sync: false` in `render.yaml` — you must set them in the dashboard:
+Email verification links are served by the **backend** at `/api/auth/confirm`, then redirect into the app via `casevault://auth/confirm`.
 
-| Variable | Required | Notes |
-|----------|----------|-------|
-| `SUPABASE_URL` | **Yes** | e.g. `https://xxxxx.supabase.co` |
-| `SUPABASE_ANON_KEY` | **Yes** | Supabase publishable anon key |
-| `MUNSHI_CRON_SECRET` | Recommended | Random 32+ chars — protects cron endpoint |
-| `MUNSHI_ADMIN_TOKEN` | Optional | Admin/dev routes; cron fallback |
-| `STRIPE_WEBHOOK_SECRET` | Optional | When billing goes live |
-| `SUPABASE_SERVICE_ROLE_KEY` | Optional | Dev purge route only |
+---
 
-Generate a secret:
+## Render env vars (backend only)
+
+### Required
+
+| Variable | Value |
+|----------|-------|
+| `SUPABASE_URL` | `https://yacyqfxaogynvdlohfeo.supabase.co` |
+| `SUPABASE_ANON_KEY` | `sb_publishable_8bFiyh_91HKyZNrUsaXnWQ_rdfyEv-n` |
+| `MUNSHI_DEMO` | `0` |
+| `MUNSHI_SERVE_UI` | `0` |
+| `MUNSHI_OPENAPI` | `0` |
+| `MUNSHI_FRONTEND_URL` | **Same as your Render backend URL** (see above) |
+| `MUNSHI_MOBILE_AUTH_REDIRECT` | `casevault://auth/confirm` |
+| `MUNSHI_CRON_SECRET` | Random string you generate (see below) |
+| `PYTHONUNBUFFERED` | `1` |
+
+### Generate `MUNSHI_CRON_SECRET` (not from Supabase)
 
 ```powershell
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Non-secret vars are already in `render.yaml` (`MUNSHI_DEMO=0`, `MUNSHI_FRONTEND_URL`, etc.).
+Copy the output into Render. Skip `MUNSHI_ADMIN_TOKEN`, Stripe, and service role key for now.
 
-### Optional: persistent disk (causelist cache)
+---
 
-Render Dashboard → **munshi-api** → **Disks** → add disk mounted at `/data`.  
-`MUNSHI_DATA_DIR=/data` is already set in `render.yaml`.
+## Deploy on Render
 
-## 4. Supabase setup
+**Dockerfile path:** `Dockerfile.api`  
+**Health check:** `/healthz`
 
-1. Run `backend/profiles_schema.sql` in Supabase → **SQL Editor**
-2. **Authentication → URL Configuration:**
-   - **Site URL:** `https://munshi-api.onrender.com`
-   - **Redirect URLs:**
-     - `https://munshi-api.onrender.com/**`
-     - `casevault://auth/confirm`
-3. **Email template** (Confirm signup) — link:
-   ```
-   {{ .SiteURL }}/api/auth/confirm?token_hash={{ .TokenHash }}&type=signup
-   ```
+If repo not visible: GitHub → Settings → Applications → Render → allow **Lawyer_Mobile**.
 
-## 5. Verify deployment
+---
 
-```powershell
-curl https://munshi-api.onrender.com/healthz
-```
+## Supabase (one-time)
 
-Expected:
+1. SQL Editor → run `backend/profiles_schema.sql`
+2. Auth → URL configuration:
+   - **Site URL:** your Render backend URL
+   - **Redirect URLs:** `https://YOUR-RENDER-URL/**` and `casevault://auth/confirm`
 
-```json
-{"ok": true, "mode": "api-only", "supabase": true, "demo": false}
-```
+---
 
-Web app: open `https://casevault-web.onrender.com` in a browser.
-
-> **Free tier:** services sleep after ~15 min idle. First request after sleep may take 30–60 seconds.
-
-## 6. Build APK (local — points at Render API)
+## After deploy — send me the URL
 
 ```powershell
-.\scripts\build-apk.ps1 -ApiBase https://munshi-api.onrender.com -Mode debug
+curl https://YOUR-RENDER-URL.onrender.com/healthz
+```
+
+When that returns `"ok": true`, share the URL and we will:
+
+```powershell
+.\scripts\build-apk.ps1 -ApiBase https://YOUR-RENDER-URL.onrender.com
 adb install app\build\app\outputs\flutter-apk\app-debug.apk
 ```
 
-## Cron (cause-list sync)
-
-POST `https://munshi-api.onrender.com/api/cron/causelist-sync` with header `X-Cron-Secret: <MUNSHI_CRON_SECRET>`.
-
-Use Render Cron Jobs, GitHub Actions, or `backend/scripts/run-causelist-cron.ps1` locally. See `backend/README.md`.
-
-## Files
-
-| File | Role |
-|------|------|
-| `Dockerfile.api` | Backend Docker image |
-| `Dockerfile.web` | Flutter web build + nginx |
-| `render.yaml` | Blueprint for both services |
-| `docker/` | nginx config + web build script |
-| `scripts/build-apk.ps1` | Local APK build |
-| `scripts/build-web.ps1` | Local web build |
+Then test on your phone: guest mode, sign-up, email confirm, login, profile, court lookup.

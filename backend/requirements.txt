@@ -4,6 +4,11 @@ supabase>=2.4
 python-dotenv>=1.0
 httpx>=0.27
 stripe>=10.0
+# courts/parse-causelist takes multipart file uploads (FastAPI's File/Form) —
+# without this, the app crashes on import, not just at request time.
+python-multipart>=0.0.9
+# court_lookup.py imports this directly for live DRT fetches — was previously
+# only present by luck as a transitive dependency of another package.
+requests>=2.31
 # Legacy court ingest (optional; not used by auth-only app.py):
 # pillow>=10.0
-# requests>=2.31
