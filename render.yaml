@@ -20,7 +20,7 @@ services:
       - key: MUNSHI_SERVE_UI
         value: "0"
       - key: MUNSHI_OPENAPI
-        value: "0"
+        value: "1"
       # NOT a web frontend — legacy env name. Set to this same backend URL (mobile-only deploy).
       - key: MUNSHI_FRONTEND_URL
         value: https://munshi-api.onrender.com

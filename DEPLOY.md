@@ -48,7 +48,7 @@ Email verification links are served by the **backend** at `/api/auth/confirm`, t
 | `SUPABASE_ANON_KEY` | `sb_publishable_8bFiyh_91HKyZNrUsaXnWQ_rdfyEv-n` |
 | `MUNSHI_DEMO` | `0` |
 | `MUNSHI_SERVE_UI` | `0` |
-| `MUNSHI_OPENAPI` | `0` |
+| `MUNSHI_OPENAPI` | `1` (Swagger at `/api/docs`) |
 | `MUNSHI_FRONTEND_URL` | **Same as your Render backend URL** (see above) |
 | `MUNSHI_MOBILE_AUTH_REDIRECT` | `casevault://auth/confirm` |
 | `MUNSHI_CRON_SECRET` | Random string you generate (see below) |
