@@ -30,28 +30,40 @@ Then http://127.0.0.1:4173/ serves `web/munshi-ui/index.html`.
 ## Email confirmation
 
 The confirmation email link points at **this API's own page**, `GET /api/auth/confirm`
-— not a raw `casevault://` deep link, and not the legacy web app. That page verifies
-the one-time Supabase token server-side exactly once, shows a branded "Email
-verified" page, then hands off a ready-to-use session to the app via
+— not a raw `casevault://` deep link, and not the legacy web app. That page hands off
+a ready-to-use session to the app via
 `casevault://auth/confirm#access_token=...&refresh_token=...` (fragment, never a
 query string, so tokens never hit server logs). If the app doesn't auto-open
 (different device, app not installed), the page still says the account is
 verified and offers a manual "Open Case Vault" button — never a dead end.
 
-**One-time Supabase dashboard setup** (project `yacyqfxaogynvdlohfeo`):
-1. **Authentication → URL Configuration** — Site URL = this API's own public host
-   (e.g. `https://munshi-api.onrender.com`, not the legacy web app), and add it
-   (plus `http://127.0.0.1:4173` for local dev) to **Redirect URLs**.
-2. **Authentication → Email Templates → Confirm signup** — the link must be built as
-   `{{ .SiteURL }}/api/auth/confirm?token_hash={{ .TokenHash }}&type=signup` (this is
-   what makes the click land on our page instead of Supabase's own generic one).
+**Required, one-time Supabase dashboard setup** (project `yacyqfxaogynvdlohfeo`) —
+**Authentication → URL Configuration**: Site URL = this API's own public host
+(`https://munshi-api.onrender.com`, not the legacy web app), and add it to
+**Redirect URLs** (`https://munshi-api.onrender.com/**`; add `http://127.0.0.1:4173/**`
+too for local dev). Supabase's Site URL defaults to `http://localhost:3000` — if
+confirm links ever redirect there, this step wasn't done (or wasn't saved).
 
-`email_redirect_to` is still sent on signup/resend (computed from the request's own
-host — see `_confirm_redirect_url` in `app/routers/auth.py`), but the real
-confirmation mechanism is the `token_hash` in the email template above, consumed by
-`GET /api/auth/confirm`. `POST /api/auth/confirm` (JSON, same token_hash contract)
-still exists for the rare case where the app itself catches a raw `casevault://`
-link directly.
+**Two different mechanisms, because Supabase blocks editing the email template on
+the free tier** ("Email template modification is not available for free tier
+projects using the default email provider" — confirmed by trying via the
+Management API and getting a 400). `GET /api/auth/confirm` handles both:
+
+1. **Free tier (current default)** — Supabase keeps using its own
+   `{{ .ConfirmationURL }}` template, verifies the token **server-side at
+   Supabase itself**, and redirects here with the session already in the URL
+   **fragment** (`#access_token=...`). A server can never read a fragment (it's
+   never sent over the wire) — so when `token_hash` is absent from the query
+   string, this route serves a small page whose own JS reads `location.hash`
+   and hands off to the app directly. No backend call happens in this path at
+   all; Supabase already did the verification.
+2. **Paid plan or custom SMTP** — if you ever customize the "Confirm signup"
+   template to `{{ .SiteURL }}/api/auth/confirm?token_hash={{ .TokenHash }}&type=signup`,
+   `token_hash` arrives as a real query param, and this route verifies it here,
+   server-side, exactly once (`POST /api/auth/confirm` — JSON, same contract —
+   still exists too, for the app catching a raw `casevault://` link directly).
+
+Either way, tokens only ever travel in the fragment, never a query string or log.
 
 ## Full endpoint reference
 

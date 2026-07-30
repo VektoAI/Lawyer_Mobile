@@ -220,17 +220,67 @@ def _confirm_page_html(*, ok: bool, message: str, deep_link: str | None = None) 
 </div>{auto_redirect}</body></html>"""
 
 
+_CONFIRM_FRAGMENT_FALLBACK_HTML = f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Confirming — Case Vault</title>
+<style>{_CONFIRM_PAGE_STYLE}</style></head>
+<body><div class="card" id="c">
+<div class="badge">&hellip;</div>
+<h1>Confirming&hellip;</h1>
+<p>One moment.</p>
+</div>
+<script>
+(function() {{
+  var frag = location.hash ? location.hash.slice(1) : '';
+  var params = new URLSearchParams(frag);
+  var access = params.get('access_token');
+  var el = document.getElementById('c');
+  if (access) {{
+    var deepLink = 'casevault://auth/confirm#' + frag;
+    el.className = 'card ok';
+    el.innerHTML = '<div class="badge">&#10003;</div><h1>Email verified</h1>'
+      + '<p>Opening the Case Vault app&hellip;</p>'
+      + '<p><a class="btn" href="' + deepLink + '">Open Case Vault</a></p>'
+      + '<div class="hint">You can close this tab.</div>';
+    try {{ location.replace(deepLink); }} catch (e) {{}}
+  }} else {{
+    var err = params.get('error_description') || params.get('error');
+    el.className = 'card err';
+    el.innerHTML = '<div class="badge">&#33;</div><h1>Link didn\\'t work</h1>'
+      + '<p>' + (err ? err.replace(/\\+/g, ' ') : 'This link has expired or was already used.') + '</p>'
+      + '<div class="hint">Open the app and tap Resend confirmation email.</div>';
+  }}
+}})();
+</script>
+</body></html>"""
+
+
 @router.get("/auth/confirm", response_class=HTMLResponse)
 def confirm_email_page(token_hash: str = "", otp_type: str = Query("signup", alias="type")):
     """Where the confirmation email link actually points (see _confirm_redirect_url).
 
-    Verifies the one-time token here, server-side, exactly once — then hands a
-    ready-to-use session to the app via a casevault:// deep link fragment
-    (#access_token=...), which the app already knows how to adopt directly
-    (AuthService.sessionFromAuthCallbackUri). No tokens ever go in a query
-    string or server log — only in the fragment, which browsers never send
-    over the wire and only exists for the receiving app to read.
+    Two ways a request can arrive here, depending on the Supabase email
+    template in use:
+
+    1. Custom template with {{ .TokenHash }} in the link — token_hash arrives
+       as a query param. We verify it here, server-side, exactly once, then
+       hand a ready-to-use session to the app via a casevault:// deep link
+       fragment. (Requires a paid Supabase plan or custom SMTP to edit the
+       template — see backend/README.md.)
+    2. Supabase's *default* {{ .ConfirmationURL }} template (what a free-tier
+       project is stuck with) — Supabase verifies server-side itself and
+       redirects here with the session already in the URL *fragment*
+       (#access_token=...), which a server can never see (fragments never
+       reach the server). We render a page whose own JS reads the fragment
+       and hands off to the app directly — no token_hash, no server call.
+
+    Either way, tokens only ever travel in the fragment, never a query string
+    or server log.
     """
+    if not token_hash:
+        return HTMLResponse(_CONFIRM_FRAGMENT_FALLBACK_HTML, headers={"Cache-Control": "no-store"})
+
     try:
         user, session, email, salt = _verify_otp_and_confirm(token_hash, otp_type)
     except ValueError as exc:

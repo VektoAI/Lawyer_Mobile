@@ -35,11 +35,17 @@ class _FakeVerifyResult:
     session = _FakeSession()
 
 
-def test_confirm_page_missing_token_shows_error_not_a_crash():
+def test_confirm_page_missing_token_hash_serves_fragment_fallback():
+    """No token_hash query param is the *normal* case on Supabase's free tier —
+    it verifies server-side and puts the session in the URL fragment instead,
+    which this response can't see server-side. The page itself must still
+    load (200) with client-side JS that reads the fragment; it is not an
+    error until that JS also finds nothing."""
     r = client.get("/api/auth/confirm")
-    assert r.status_code == 400
+    assert r.status_code == 200
     assert r.headers["cache-control"] == "no-store"
-    assert "link" in r.text.lower()
+    assert "location.hash" in r.text
+    assert "access_token" in r.text
 
 
 def test_confirm_page_expired_token_shows_error(monkeypatch):
