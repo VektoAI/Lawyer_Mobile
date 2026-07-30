@@ -1,0 +1,52 @@
+name: munshi_mobile
+description: >
+  Munshi (internal codename) mobile client. NOT the public app name — rename
+  before any store submission (CLAUDE.md invariant 12, ROADMAP.md 2.2).
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State + navigation
+  flutter_riverpod: ^2.5.1
+  go_router: ^14.2.0
+
+  path: ^1.9.0
+  path_provider: ^2.1.3
+
+  # Vault crypto — mirrors munshi-ui/vault.js exactly (PBKDF2-SHA256 250k,
+  # AES-GCM-256). See lib/crypto/vault_crypto.dart for why Argon2id was NOT
+  # substituted here despite the scale-up brief's loose wording.
+  cryptography: ^2.7.0
+  flutter_secure_storage: ^9.2.2
+
+  # Sync client (mobile/backend/ ciphertext push/pull)
+  http: ^1.2.1
+  uuid: ^4.4.0
+
+  # Backup import/export + share APK backup file
+  file_picker: ^8.0.6
+  share_plus: ^10.0.0
+  shared_preferences: ^2.3.2
+  flutter_local_notifications: ^17.2.3
+  timezone: ^0.9.4
+  app_links: ^6.3.2
+  google_fonts: ^8.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+
+dependency_overrides:
+  jni: 1.0.2
+  jni_flutter: 1.0.2

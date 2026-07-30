@@ -1,0 +1,29 @@
+# Flutter web — build + nginx. Deployed as casevault-web on Render.
+# Build-time: MUNSHI_API_BASE (from Render env) is baked into the web bundle.
+# Runtime: nginx listens on $PORT (Render sets this automatically).
+
+FROM ghcr.io/cirruslabs/flutter:stable AS build
+WORKDIR /src/app
+
+COPY app/pubspec.yaml app/pubspec.lock ./
+RUN flutter pub get
+
+COPY app/ ./
+
+# Override at build time via Render env MUNSHI_API_BASE (defaults to munshi-api service URL).
+ARG MUNSHI_API_BASE=https://munshi-api.onrender.com
+ENV MUNSHI_API_BASE=${MUNSHI_API_BASE}
+
+COPY docker/build-web.sh /tmp/build-web.sh
+RUN chmod +x /tmp/build-web.sh && /tmp/build-web.sh
+
+FROM nginx:1.27-alpine
+
+COPY docker/nginx-web.conf.template /etc/nginx/conf.d/default.conf.template
+COPY docker/docker-entrypoint-web.sh /docker-entrypoint-web.sh
+RUN chmod +x /docker-entrypoint-web.sh
+
+COPY --from=build /src/app/build/web /usr/share/nginx/html
+
+EXPOSE 8080
+ENTRYPOINT ["/docker-entrypoint-web.sh"]

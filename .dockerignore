@@ -1,0 +1,16 @@
+.git
+.gitignore
+**/.env
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+backend/data/
+sync-backend/
+app/.dart_tool/
+app/build/
+app/android/.gradle/
+app/android/local.properties
+app/ios/Pods/
+*.md
+.gstack/

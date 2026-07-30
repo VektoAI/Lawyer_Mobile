@@ -1,0 +1,68 @@
+# Render Blueprint — Case Vault
+#
+# Services:
+#   munshi-api       FastAPI backend (auth, courts, cron) — used by APK + web
+#   casevault-web    Flutter web build served by nginx (optional browser access)
+#
+# Deploy: push repo → Render Dashboard → New Blueprint → select repo → Apply
+# Then set secret env vars in the dashboard (see DEPLOY.md).
+#
+# APK is built locally (not on Render):
+#   .\scripts\build-apk.ps1 -ApiBase https://munshi-api.onrender.com
+
+services:
+  # ── Backend API (primary) ─────────────────────────────────────────────────
+  - type: web
+    name: munshi-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    plan: free
+    region: singapore
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: MUNSHI_DEMO
+        value: "0"
+      - key: MUNSHI_SERVE_UI
+        value: "0"
+      - key: MUNSHI_OPENAPI
+        value: "0"
+      # Must match this service URL — email confirm links land here.
+      - key: MUNSHI_FRONTEND_URL
+        value: https://munshi-api.onrender.com
+      - key: MUNSHI_MOBILE_AUTH_REDIRECT
+        value: casevault://auth/confirm
+      - key: MUNSHI_CORS_ORIGINS
+        value: https://casevault-web.onrender.com,http://127.0.0.1:4173,http://localhost:4173
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      # Optional: mount a persistent disk in Render dashboard at /data, then set MUNSHI_DATA_DIR=/data
+      - key: MUNSHI_DATA_DIR
+        value: /data
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: MUNSHI_CRON_SECRET
+        sync: false
+      - key: MUNSHI_ADMIN_TOKEN
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+  # ── Flutter web (browser) ─────────────────────────────────────────────────
+  - type: web
+    name: casevault-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile.web
+    plan: free
+    region: singapore
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: MUNSHI_API_BASE
+        value: https://munshi-api.onrender.com
+      - key: PYTHONUNBUFFERED
+        value: "1"

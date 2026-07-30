@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Munshi — Concierge Console</title>
+<style>
+  :root{--ink:#1A2421;--teal:#0F2E27;--gold:#8F6B2E;--bg:#F7F5F0;--line:#E7E3D8}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,'Inter',sans-serif;background:var(--bg);color:var(--ink);max-width:760px;margin:0 auto;padding:24px 16px}
+  h1{font-size:22px;margin-bottom:4px} .sub{color:#5A6660;font-size:13px;margin-bottom:20px}
+  .bar{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+  button{font-family:inherit;border:none;cursor:pointer;border-radius:10px;padding:10px 16px;font-size:13.5px;font-weight:600}
+  .primary{background:var(--teal);color:#F3EFE6}
+  .ghost{background:#fff;border:1px solid var(--line);color:var(--ink)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+  .card .meta{font-size:11.5px;color:#5A6660;letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px;display:flex;gap:10px;align-items:center}
+  .chip{background:#F2EBDA;color:var(--gold);padding:2px 8px;border-radius:8px;font-weight:700}
+  pre{white-space:pre-wrap;font-family:inherit;font-size:13.5px;line-height:1.5;margin:8px 0 12px}
+  .actions{display:flex;gap:8px}
+  .wa{background:#0F2E27;color:#CBB27F}
+  .ok{background:#EBF1EB;color:#2E7D5B}
+  #summary{font-size:13px;color:#5A6660;margin:8px 0 16px;white-space:pre-wrap}
+  .empty{color:#8D968F;text-align:center;padding:30px;font-size:14px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:#8D968F;margin:22px 0 10px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;background:#fff;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+  td,th{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line)} th{background:#F2F0E9;font-size:11px;text-transform:uppercase;letter-spacing:.6px}
+</style>
+</head>
+<body>
+<h1>⚖️ Concierge Console</h1>
+<div class="sub">Run the nightly pull, then send each pending message by hand — the Wizard-of-Oz pilot, exactly as designed.</div>
+<div class="bar">
+  <button class="primary" onclick="runIngest()">▶ Run nightly ingestion</button>
+  <input type="date" id="pullDate" style="font-family:inherit;font-size:13px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff">
+  <button class="ghost" onclick="runIngestFor()">Pull for date</button>
+  <button class="ghost" onclick="load()">↻ Refresh</button>
+</div>
+<div id="summary"></div>
+<h2>Enroll a lawyer</h2>
+<div class="card">
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <input id="enName" placeholder="Adv. Full Name" style="flex:1;min-width:140px;font-family:inherit;font-size:13.5px;border:1px solid var(--line);border-radius:10px;padding:9px 11px">
+    <input id="enPhone" placeholder="+91XXXXXXXXXX" style="flex:1;min-width:140px;font-family:inherit;font-size:13.5px;border:1px solid var(--line);border-radius:10px;padding:9px 11px">
+    <button class="primary" onclick="enroll()">Enroll</button>
+  </div>
+  <div id="enMsg" style="font-size:12.5px;color:#5A6660;margin-top:8px"></div>
+</div>
+
+<h2>Post a case update (concierge — for courts not yet auto-tracked)</h2>
+<div class="card">
+  <select id="ceCase" style="width:100%;font-family:inherit;font-size:13.5px;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:8px;background:#fff"></select>
+  <input id="ceText" placeholder="Update text, e.g. 'Adjourned — next date fixed. IO absent.'" style="width:100%;font-family:inherit;font-size:13.5px;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:8px">
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <input id="ceDate" type="date" title="New next-hearing date (optional)" style="font-family:inherit;font-size:13px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff">
+    <button class="primary" onclick="postUpdate()">Post to case chat</button>
+  </div>
+  <div id="ceMsg" style="font-size:12.5px;color:#5A6660;margin-top:8px"></div>
+</div>
+
+<h2>Outbox — pending sends</h2>
+<div id="list"></div>
+<h2>Source health (last runs)</h2>
+<div id="health"></div>
+
+<script>
+let TOKEN = localStorage.getItem('munshi_token');
+async function api(path, opts={}){
+  if(!TOKEN){
+    const r = await fetch('/api/auth/demo',{method:'POST'});
+    if(r.ok){ TOKEN = (await r.json()).token; }
+    else { TOKEN = prompt('Demo login is disabled on this server.\nPaste the admin token (MUNSHI_ADMIN_TOKEN):') || ''; }
+    localStorage.setItem('munshi_token', TOKEN);
+  }
+  const r = await fetch('/api'+path, {...opts, headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN, ...(opts.headers||{})}});
+  if(r.status===401){ localStorage.removeItem('munshi_token'); TOKEN=null; return api(path, opts); }
+  return r.json();
+}
+async function runIngest(dateStr){
+  document.getElementById('summary').textContent = 'Running… (live courts can take ~15s)';
+  const s = await api('/ingest/run', {method:'POST', body: dateStr ? JSON.stringify({date:dateStr}) : '{}'});
+  document.getElementById('summary').textContent =
+    `Pulled ${s.courts} court(s) for ${s.date} · ${s.entries} listings matched · ${s.events} new event(s) · ${s.outbox} new outbox item(s) · ${s.skipped_dupes} duplicate(s) safely skipped (idempotent re-run).`;
+  load();
+}
+function runIngestFor(){
+  const v = document.getElementById('pullDate').value;
+  if(!v) return alert('Pick a date first');
+  runIngest(v);
+}
+async function load(){
+  const items = await api('/outbox?status=pending');
+  const list = document.getElementById('list');
+  list.innerHTML = items.length ? items.map(i => `
+    <div class="card">
+      <div class="meta"><span class="chip">${i.template}</span><span>→ ${i.recipient}</span><span>${i.created_at}</span></div>
+      <pre>${i.payload.replace(/</g,'&lt;')}</pre>
+      <div class="actions">
+        <button class="wa" onclick="waOpen(${i.id},'${i.recipient}')">Open in WhatsApp</button>
+        <button class="ok" onclick="markSent(${i.id})">✓ Mark sent</button>
+      </div>
+      <pre id="p${i.id}" style="display:none">${i.payload.replace(/</g,'&lt;')}</pre>
+    </div>`).join('') : '<div class="empty">Outbox is empty — run the nightly ingestion.</div>';
+  const health = await api('/health/sources');
+  document.getElementById('health').innerHTML = health.length ? '<table><tr><th>Court</th><th>Date</th><th>Fetched</th><th>Entries</th><th>Error</th></tr>' +
+    health.map(h=>`<tr><td>${h.name}</td><td>${h.run_date}</td><td>${h.fetched_ok?'✅':'❌'}</td><td>${h.entries}</td><td>${h.error||'—'}</td></tr>`).join('') + '</table>'
+    : '<div class="empty">No runs yet.</div>';
+}
+function waOpen(id, recipient){
+  const text = document.getElementById('p'+id).textContent;
+  window.open('https://wa.me/' + recipient.replace(/[^0-9]/g,'') + '?text=' + encodeURIComponent(text));
+}
+async function markSent(id){ await api('/outbox/'+id+'/sent',{method:'POST'}); load(); }
+async function enroll(){
+  const name = document.getElementById('enName').value.trim();
+  const phone = document.getElementById('enPhone').value.trim();
+  const out = document.getElementById('enMsg');
+  if(!name || !phone){ out.textContent = 'Name and phone required.'; return; }
+  const r = await api('/admin/lawyers', {method:'POST', body: JSON.stringify({name, phone})});
+  out.textContent = r.ok ? `✓ Enrolled (chamber #${r.chamber_id}). ${r.note}` : ('✗ ' + (r.detail || 'failed'));
+  if(r.ok){ document.getElementById('enName').value = ''; document.getElementById('enPhone').value = ''; }
+}
+async function loadCases(){
+  const cases = await api('/admin/cases');
+  document.getElementById('ceCase').innerHTML = cases.map(c =>
+    `<option value="${c.id}">#${c.id} · ${c.case_no} — ${c.parties} (${c.court})${c.chambers ? ' — ' + c.chambers : ''}</option>`).join('');
+}
+async function postUpdate(){
+  const out = document.getElementById('ceMsg');
+  const body = {case_id: parseInt(document.getElementById('ceCase').value),
+                text: document.getElementById('ceText').value.trim()};
+  const d = document.getElementById('ceDate').value; if(d) body.next_date = d;
+  if(!body.text){ out.textContent = 'Write the update text.'; return; }
+  const r = await api('/admin/case-event', {method:'POST', body: JSON.stringify(body)});
+  out.textContent = r.ok ? '✓ Posted — it appears in the case chat and bumps unread.' : ('✗ ' + (r.detail || 'failed'));
+  if(r.ok) document.getElementById('ceText').value = '';
+}
+loadCases();
+load();
+</script>
+</body>
+</html>
