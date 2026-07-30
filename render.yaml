@@ -1,6 +1,6 @@
 # Render Blueprint — backend API only (munshi-api)
 #
-# Repo: https://github.com/omkar-vekto/Lawyer_Mobile
+# Repo: https://github.com/VektoAI/Lawyer_Mobile
 # Flutter APK is built locally — not deployed on Render.
 #
 # After Blueprint Apply, set secrets in Render dashboard (see DEPLOY.md).

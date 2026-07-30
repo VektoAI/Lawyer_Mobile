@@ -6,13 +6,12 @@ Flutter client + FastAPI backend. Case data is **encrypted on device**; the serv
 
 ```
 casevault/
-├── app/              Flutter (Android APK, iOS, web)
+├── app/              Flutter (Android APK, iOS)
 ├── backend/          FastAPI — auth, courts, cron
 ├── sync-backend/     Future E2EE sync (not production)
 ├── Dockerfile.api    Backend image → Render munshi-api
-├── Dockerfile.web    Flutter web → Render casevault-web
-├── render.yaml       Render Blueprint (both services)
-└── scripts/          build-apk.ps1, build-web.ps1
+├── render.yaml       Render Blueprint (backend only)
+└── scripts/          build-apk.ps1
 ```
 
 ## Quick start (local)
@@ -46,9 +45,8 @@ Full guide: **`DEPLOY.md`**
 
 | Service | Hosts |
 |---------|-------|
-| `munshi-api` | Backend API |
-| `casevault-web` | Flutter web (browser) |
-| Local APK | Built with `scripts/build-apk.ps1` — **not** on Render |
+| `munshi-api` | Backend API (Render) |
+| Local APK | Built with `scripts/build-apk.ps1` on your PC |
 
 ## Build APK for phone
 

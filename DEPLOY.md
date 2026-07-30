@@ -3,7 +3,7 @@
 **Render:** backend API only  
 **Phone:** Flutter APK only (no web app)
 
-Repo: **https://github.com/omkar-vekto/Lawyer_Mobile**
+Repo: **https://github.com/VektoAI/Lawyer_Mobile**
 
 ---
 
