@@ -17,4 +17,7 @@ class ProductCopy {
   static const emailVerifiedSignIn = 'Email verified. Sign in with your password.';
   static const emailVerifiedDone = 'Email verified — welcome';
   static const resendVerification = 'Resend verification email';
+  static const resendVerificationSent =
+      "Sent — check your inbox and spam folder. Didn't sign up with this email before? "
+      'There may be nothing to confirm.';
 }

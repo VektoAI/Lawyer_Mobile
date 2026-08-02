@@ -35,6 +35,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _busy = false;
   String? _helpText;
   String? _recoveryKey;
+  DateTime? _resendCooldownUntil;
 
   @override
   void initState() {
@@ -308,16 +309,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  static const _resendCooldown = Duration(seconds: 45);
+
+  bool get _resendOnCooldown =>
+      _resendCooldownUntil != null && DateTime.now().isBefore(_resendCooldownUntil!);
+
   Future<void> _resendConfirm() async {
     final email = _email.text.trim().toLowerCase();
     if (email.isEmpty) {
       _toast('Enter your email first');
       return;
     }
+    if (_resendOnCooldown) {
+      _toast('Already sent — give it a minute before trying again');
+      return;
+    }
+    // Supabase's built-in mailer has a low per-address rate limit; repeated
+    // taps can silently burn through it with no error surfaced to the app,
+    // so throttle client-side before it ever gets that far.
+    setState(() => _resendCooldownUntil = DateTime.now().add(_resendCooldown));
     try {
       await ref.read(authServiceProvider).resendConfirmation(email);
-      _toast('Confirmation email sent');
+      _toast(ProductCopy.resendVerificationSent);
     } on AuthException catch (e) {
+      setState(() => _resendCooldownUntil = null);
       _toast(e.message);
     }
   }
@@ -498,8 +513,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         if (!isSignup) ...[
                           const SizedBox(height: 8),
                           TextButton(
-                            onPressed: _busy ? null : _resendConfirm,
-                            child: const Text(ProductCopy.resendVerification),
+                            onPressed: (_busy || _resendOnCooldown) ? null : _resendConfirm,
+                            child: Text(
+                              _resendOnCooldown ? 'Sent — check your inbox' : ProductCopy.resendVerification,
+                            ),
                           ),
                         ],
                         const SizedBox(height: 16),

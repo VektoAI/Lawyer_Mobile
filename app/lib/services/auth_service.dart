@@ -1,6 +1,7 @@
 /// Auth/billing HTTP client for the mobile app (Render + Supabase).
 library;
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -8,6 +9,12 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../crypto/vault_crypto.dart' show randomBytes;
+
+/// Render free tier spins the dyno down after ~15 min idle; the first
+/// request after that can itself take 30-50s to wake it. Bound the wait so a
+/// stalled connection fails with a clear, retryable message instead of
+/// hanging on whatever the OS-level socket timeout happens to be.
+const _requestTimeout = Duration(seconds: 25);
 
 class AuthException implements Exception {
   AuthException(this.message, {this.status});
@@ -162,11 +169,20 @@ class AuthService {
 
   Future<Map<String, dynamic>> _postJson(String path, Map<String, dynamic> body) async {
     final uri = Uri.parse('${ApiConfig.apiRoot}$path');
-    final res = await _client.post(
-      uri,
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-      body: jsonEncode(body),
-    );
+    http.Response res;
+    try {
+      res = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(_requestTimeout);
+    } on TimeoutException {
+      throw AuthException(
+        'Server is taking too long to respond (it may be waking up after being idle) — please try again.',
+      );
+    }
     Map<String, dynamic>? decoded;
     try {
       decoded = jsonDecode(res.body) as Map<String, dynamic>?;

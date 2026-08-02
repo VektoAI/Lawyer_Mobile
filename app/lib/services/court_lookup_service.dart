@@ -1,6 +1,7 @@
 /// Authenticated API calls — Render-hosted backend (`../backend/app/main.py`).
 library;
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -8,6 +9,10 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import 'auth_service.dart';
+
+/// See auth_service.dart's `_requestTimeout` — same reasoning: fail fast and
+/// clearly instead of hanging on a stalled/cold-starting connection.
+const _requestTimeout = Duration(seconds: 25);
 
 class ApiClient {
   ApiClient({http.Client? client, AuthService? auth}) : _client = client ?? http.Client(), _auth = auth ?? AuthService();
@@ -48,14 +53,22 @@ class ApiClient {
         ));
   }
 
+  Future<http.Response> _send(Future<http.Response> Function(Map<String, String> headers) send, Map<String, String> headers) async {
+    try {
+      return await send(headers).timeout(_requestTimeout);
+    } on TimeoutException {
+      throw Exception('Request timed out — check your connection and try again.');
+    }
+  }
+
   Future<Map<String, dynamic>> _withRefresh(Future<http.Response> Function(Map<String, String> headers) send) async {
     var headers = await _authHeaders();
-    var res = await send(headers);
+    var res = await _send(send, headers);
     if (res.statusCode == 401) {
       final ok = await _auth.refreshAccessToken();
       if (ok) {
         headers = await _authHeaders();
-        res = await send(headers);
+        res = await _send(send, headers);
       }
     }
     return _decode(res);

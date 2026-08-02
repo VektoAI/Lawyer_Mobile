@@ -10,5 +10,6 @@ python-multipart>=0.0.9
 # court_lookup.py imports this directly for live DRT fetches — was previously
 # only present by luck as a transitive dependency of another package.
 requests>=2.31
-# Legacy court ingest (optional; not used by auth-only app.py):
+# Windows lacks system tzdata — court_lookup uses ZoneInfo("Asia/Kolkata").
+tzdata>=2024.1
 # pillow>=10.0

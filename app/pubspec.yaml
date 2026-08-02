@@ -24,6 +24,10 @@ dependencies:
   # AES-GCM-256). See lib/crypto/vault_crypto.dart for why Argon2id was NOT
   # substituted here despite the scale-up brief's loose wording.
   cryptography: ^2.7.0
+  # Routes PBKDF2/AES-GCM to native platform crypto instead of pure-Dart —
+  # without this, 250k PBKDF2 iterations run interpreted and are drastically
+  # slower on-device (worst on debug builds).
+  cryptography_flutter: ^2.3.4
   flutter_secure_storage: ^9.2.2
 
   # Sync client (mobile/backend/ ciphertext push/pull)
