@@ -7,7 +7,7 @@ import logging
 from html import escape
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
 
 from app.config import get_settings
@@ -80,7 +80,7 @@ def _session_payload(user, session, email: str, salt: str | None = None, plan: s
 
 @router.post("/signup", response_model=AuthSessionResponse)
 @limiter.limit(lambda: get_settings().rate_limit_signup)
-def signup(request: Request, body: SignupBody):
+def signup(request: Request, response: Response, body: SignupBody):
     """Create account. Case data stays on the user's device only."""
     email = body.email.strip().lower()
     if email in _KEEP_EMAILS:
@@ -313,7 +313,7 @@ def confirm_email_page(token_hash: str = "", otp_type: str = Query("signup", ali
 
 @router.post("/auth/resend-confirm", response_model=ResendConfirmResponse)
 @limiter.limit(lambda: get_settings().rate_limit_resend_confirm)
-def resend_confirm(request: Request, body: ResendBody):
+def resend_confirm(request: Request, response: Response, body: ResendBody):
     """Resend signup confirmation email. Sign-in never sends mail."""
     email = body.email.strip().lower()
     if not email or "@" not in email:
@@ -341,7 +341,7 @@ def resend_confirm(request: Request, body: ResendBody):
 
 @router.post("/login", response_model=AuthSessionResponse)
 @limiter.limit(lambda: get_settings().rate_limit_login)
-def login(request: Request, body: LoginBody):
+def login(request: Request, response: Response, body: LoginBody):
     """Email + password → JWT. Does NOT send email."""
     email = body.email.strip().lower()
     if not email or not body.password:

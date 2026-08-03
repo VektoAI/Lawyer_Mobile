@@ -6,12 +6,42 @@ with the rest of the suite.
 """
 from __future__ import annotations
 
+import inspect
+
 from fastapi.testclient import TestClient
 
 from app.config import get_settings
 from app.main import app
 
 client = TestClient(app)
+
+
+def test_rate_limited_routes_accept_response_param_for_header_injection():
+    """Regression test for a real bug: slowapi's `Limiter.limit()` decorator
+    needs a `response: Response` parameter on any decorated endpoint that
+    doesn't itself return a `starlette.responses.Response` (i.e. returns a
+    plain dict, as every route below does) — otherwise its header-injection
+    step (`_inject_headers`) throws `Exception: parameter response must be
+    an instance of starlette.responses.Response`.
+
+    This only fires on the *success* path — every existing rate-limit test
+    above used wrong credentials, which raise HTTPException before slowapi's
+    wrapper ever reaches that code, so the bug shipped to production
+    undetected. Checking the signature directly (rather than re-running
+    every route's success path, which would need live Supabase credentials
+    for signup/login) catches this for any route that's rate-limited today
+    or in the future.
+    """
+    from app.routers import auth, me
+
+    rate_limited_endpoints = [auth.signup, auth.resend_confirm, auth.login, me.delete_account]
+    for endpoint in rate_limited_endpoints:
+        sig = inspect.signature(endpoint)
+        assert "response" in sig.parameters, (
+            f"{endpoint.__name__} is decorated with @limiter.limit(...) and returns a plain "
+            "dict, but has no `response: Response` parameter — slowapi will throw on its "
+            "success path (see test_login_succeeds_with_rate_limiting_enabled)."
+        )
 
 
 def test_login_rate_limited_per_ip(monkeypatch):
@@ -58,6 +88,23 @@ def test_delete_account_rate_limited_per_account(monkeypatch):
         r2 = client.delete("/api/me", headers=headers)
         assert r1.status_code == 403  # demo account — rejected for a different reason, but still counts a hit
         assert r2.status_code == 429
+    finally:
+        get_settings.cache_clear()
+
+
+def test_login_succeeds_with_rate_limiting_enabled(monkeypatch):
+    """Concrete regression test for the same bug as the signature check
+    above: a *successful* login (not just a rejected one) must not 500 when
+    rate limiting is enabled. Uses the demo credentials so this needs no
+    live Supabase account, while still going through the real
+    @limiter.limit(...)-decorated `login()` route and its plain-dict return.
+    """
+    monkeypatch.setenv("MUNSHI_DEMO", "1")
+    get_settings.cache_clear()
+    try:
+        r = client.post("/api/login", json={"email": "demo@localhost", "password": "demo-password-change-me"})
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
     finally:
         get_settings.cache_clear()
 

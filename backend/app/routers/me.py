@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from app.config import get_settings
 from app.deps import current_user
@@ -111,7 +111,7 @@ def patch_profile(body: ProfileUpdateBody, user: dict[str, Any] = Depends(curren
 
 @router.delete("/me", response_model=DeleteAccountResponse)
 @limiter.limit(lambda: get_settings().rate_limit_delete_account, key_func=account_key)
-def delete_account(request: Request, user: dict[str, Any] = Depends(current_user)):
+def delete_account(request: Request, response: Response, user: dict[str, Any] = Depends(current_user)):
     """Permanently delete the caller's own auth account + chamber profile.
 
     Self-service only (scoped to the Bearer token's own user id — no admin
