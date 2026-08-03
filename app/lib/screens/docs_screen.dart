@@ -25,7 +25,7 @@ class DocsScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: MunshiColors.ivory,
       appBar: MunshiAppBar(
-        title: 'Docs',
+        title: 'Documents',
         actions: [
           if (!vault.readOnly)
             IconButton(
@@ -36,7 +36,38 @@ class DocsScreen extends ConsumerWidget {
         ],
       ),
       body: rows.isEmpty
-          ? const Center(child: Text('No documents yet'))
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.description_outlined, size: 36, color: MunshiColors.inkGreen.withValues(alpha: 0.35)),
+                    const SizedBox(height: 14),
+                    Text(
+                      'No documents yet',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: MunshiColors.inkGreen.withValues(alpha: 0.85)),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      vault.readOnly
+                          ? 'Documents uploaded to a case will appear here.'
+                          : 'Documents you upload to a case — pleadings, orders, evidence — appear here, encrypted on this device.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13.5, height: 1.4, color: MunshiColors.inkGreen.withValues(alpha: 0.6)),
+                    ),
+                    if (!vault.readOnly) ...[
+                      const SizedBox(height: 18),
+                      FilledButton.icon(
+                        onPressed: () => showUploadDocSheet(context, ref),
+                        icon: const Icon(Icons.upload_file, size: 18),
+                        label: const Text('Upload a document'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            )
           : ListView.separated(
               itemCount: rows.length,
               separatorBuilder: (_, __) => const Divider(height: 1),

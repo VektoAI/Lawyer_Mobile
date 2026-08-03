@@ -9,6 +9,9 @@ $ErrorActionPreference = "Stop"
 $AppDir = Join-Path $PSScriptRoot "..\app"
 Push-Location $AppDir
 try {
+    if ($Mode -eq "release" -and ($ApiBase -match '127\.0\.0\.1|localhost|10\.0\.2\.2')) {
+        throw "Release APK cannot use a local API URL ($ApiBase). Use your Render URL, e.g. https://munshi-api.onrender.com"
+    }
     Write-Host "API base: $ApiBase" -ForegroundColor Cyan
     flutter pub get
     flutter build apk "--$Mode" "--dart-define=MUNSHI_API_BASE=$ApiBase"
@@ -17,7 +20,7 @@ try {
     if (-not (Test-Path $apk)) { throw "APK not found at $apk" }
     Write-Host ""
     Write-Host "APK ready: $apk" -ForegroundColor Green
-    Write-Host "Install: adb install `"$apk`"" -ForegroundColor Yellow
+    Write-Host "Install: adb install -r `"$apk`"" -ForegroundColor Yellow
 }
 finally {
     Pop-Location

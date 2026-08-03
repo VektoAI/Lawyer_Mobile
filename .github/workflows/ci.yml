@@ -1,0 +1,45 @@
+name: CI
+
+# Runs the same checks a contributor should run locally before opening a PR:
+# ruff + pytest on the backend (app/factory.py's real TestClient suite,
+# MUNSHI_DEMO=1 mode needs no external Supabase project) and the Flutter
+# analyze+test pair. Intentionally does not deploy anything — Render's own
+# autoDeploy (see render.yaml) handles that from the main branch directly.
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt ruff
+      - run: ruff check app/
+      - run: python -m pytest -q
+
+  flutter:
+    name: Flutter (analyze + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test

@@ -16,6 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import get_settings
+from app.deps import current_user as current_user_dep
 from app.main import app
 from app.services import court_lookup
 
@@ -75,14 +76,21 @@ def test_demo_login_shortcut_disabled_when_munshi_demo_off(env, monkeypatch):
 def test_demo_token_rejected_when_munshi_demo_off(env, monkeypatch):
     env(MUNSHI_DEMO="0")
 
+    # Simulate total auth-backend failure on *both* the local-verification
+    # and remote-fallback paths (see deps.py's current_user) — the demo
+    # token must still fail closed rather than falling through to anything
+    # that grants access.
     class _FakeAuth:
+        def get_claims(self, token):
+            raise RuntimeError("no network in test")
+
         def get_user(self, token):
             raise RuntimeError("no network in test")
 
     class _FakeClient:
         auth = _FakeAuth()
 
-    monkeypatch.setattr("app.deps.supabase_client", lambda *a, **kw: _FakeClient())
+    monkeypatch.setattr("app.deps.auth_verification_client", lambda: _FakeClient())
     r = client.get("/api/me", headers={"Authorization": "Bearer demo-local-vault"})
     assert r.status_code == 401
 
@@ -197,3 +205,28 @@ def test_drt_lookup_partial_failure_is_flagged_but_not_falsely_conclusive(monkey
     assert result["verified"] is True
     assert "some dates could not be checked" in result["reason"]
     assert result["errors"]
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/me — self-service account deletion
+# ---------------------------------------------------------------------------
+
+def test_delete_account_rejects_demo():
+    r = client.post("/api/auth/demo", json={})
+    token = r.json()["token"]
+    r = client.delete("/api/me", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 403
+
+
+def test_delete_account_requires_service_role_key(env):
+    env(SUPABASE_SERVICE_ROLE_KEY=None)
+    app.dependency_overrides[current_user_dep] = lambda: {
+        "id": "test-user-id",
+        "email": "test@example.com",
+        "demo": False,
+    }
+    try:
+        r = client.delete("/api/me", headers={"Authorization": "Bearer fake"})
+        assert r.status_code == 503
+    finally:
+        app.dependency_overrides.pop(current_user_dep, None)

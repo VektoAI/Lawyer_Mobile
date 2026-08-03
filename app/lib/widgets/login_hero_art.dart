@@ -45,11 +45,11 @@ class _LoginHeroPainter extends CustomPainter {
     }
 
     canvas.drawRRect(
-      RRect.fromRectAndRadius(const Rect.fromLTWH(36, 168, 208, 14), Radius.circular(3)),
+      RRect.fromRectAndRadius(const Rect.fromLTWH(36, 168, 208, 14), const Radius.circular(3)),
       Paint()..color = MunshiColors.brassGold,
     );
     canvas.drawRRect(
-      RRect.fromRectAndRadius(const Rect.fromLTWH(48, 176, 184, 10), Radius.circular(2)),
+      RRect.fromRectAndRadius(const Rect.fromLTWH(48, 176, 184, 10), const Radius.circular(2)),
       Paint()..color = const Color(0xFFE8E0D0),
     );
 
@@ -69,7 +69,7 @@ class _LoginHeroPainter extends CustomPainter {
       gild,
     );
     canvas.drawRRect(
-      RRect.fromRectAndRadius(const Rect.fromLTWH(70, 62, 140, 12), Radius.circular(2)),
+      RRect.fromRectAndRadius(const Rect.fromLTWH(70, 62, 140, 12), const Radius.circular(2)),
       Paint()..color = const Color(0xFFCBB27F),
     );
     canvas.drawPath(
@@ -94,8 +94,8 @@ class _LoginHeroPainter extends CustomPainter {
       ..color = MunshiColors.brassGold
       ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke;
-    canvas.drawArc(Rect.fromLTWH(104, 78, 36, 40), 0, 3.14, false, brassStroke);
-    canvas.drawArc(Rect.fromLTWH(140, 78, 36, 40), 0, 3.14, false, brassStroke);
+    canvas.drawArc(const Rect.fromLTWH(104, 78, 36, 40), 0, 3.14, false, brassStroke);
+    canvas.drawArc(const Rect.fromLTWH(140, 78, 36, 40), 0, 3.14, false, brassStroke);
   }
 
   @override

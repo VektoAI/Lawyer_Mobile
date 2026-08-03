@@ -53,8 +53,7 @@ class _CasesScreenState extends ConsumerState<CasesScreen> {
     super.dispose();
   }
 
-  List<MunshiCase> _filtered(VaultStore vault) {
-    var list = vault.listCases();
+  List<MunshiCase> _filtered(List<MunshiCase> list) {
     switch (_filter) {
       case CaseFilter.tomorrow:
         list = list.where((c) => isSameIso(c.nextDate, tomorrowIso)).toList();
@@ -91,8 +90,13 @@ class _CasesScreenState extends ConsumerState<CasesScreen> {
   @override
   Widget build(BuildContext context) {
     final vault = ref.watch(vaultStoreProvider);
-    final cases = _filtered(vault);
-    final tomorrowCases = vault.listCases().where((c) => isSameIso(c.nextDate, tomorrowIso)).toList();
+    // listCases() is cached in VaultStore (recomputed only when case data
+    // actually changes), but call it once per build anyway rather than
+    // twice — no reason to redo even the cache lookup + where()/toList()
+    // filtering below more than necessary.
+    final allActiveCases = vault.listCases();
+    final cases = _filtered(allActiveCases);
+    final tomorrowCases = allActiveCases.where((c) => isSameIso(c.nextDate, tomorrowIso)).toList();
 
     return Scaffold(
       backgroundColor: MunshiColors.ivory,
@@ -174,6 +178,36 @@ class _CasesScreenState extends ConsumerState<CasesScreen> {
                   style: TextStyle(color: MunshiColors.inkGreen.withValues(alpha: 0.6)),
                 ),
               ),
+            )
+          else if (cases.isEmpty && vault.allCases.isEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(32, 28, 32, 20),
+              child: Column(
+                children: [
+                  Icon(Icons.folder_open_outlined, size: 36, color: MunshiColors.inkGreen.withValues(alpha: 0.35)),
+                  const SizedBox(height: 14),
+                  Text(
+                    'No cases yet',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: MunshiColors.inkGreen.withValues(alpha: 0.85)),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    vault.readOnly
+                        ? 'This preview chamber has no cases to show yet.'
+                        : 'Add your first case to start tracking hearings, fees, and documents — all encrypted on this device.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13.5, height: 1.4, color: MunshiColors.inkGreen.withValues(alpha: 0.6)),
+                  ),
+                  if (!vault.readOnly) ...[
+                    const SizedBox(height: 18),
+                    FilledButton.icon(
+                      onPressed: () => showAddCaseSheet(context, ref),
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Add a case'),
+                    ),
+                  ],
+                ],
+              ),
             ),
           Expanded(
             child: ListView.separated(
@@ -189,6 +223,7 @@ class _CasesScreenState extends ConsumerState<CasesScreen> {
                 }
                 final c = cases[i];
                 return CaseListTile(
+                  key: ValueKey(c.id),
                   caseItem: c,
                   onTap: () => context.push('/cases/${c.id}'),
                 );

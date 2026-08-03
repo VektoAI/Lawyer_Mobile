@@ -1,7 +1,6 @@
 /// Auth/billing HTTP client for the mobile app (Render + Supabase).
 library;
 
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -9,12 +8,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../crypto/vault_crypto.dart' show randomBytes;
-
-/// Render free tier spins the dyno down after ~15 min idle; the first
-/// request after that can itself take 30-50s to wake it. Bound the wait so a
-/// stalled connection fails with a clear, retryable message instead of
-/// hanging on whatever the OS-level socket timeout happens to be.
-const _requestTimeout = Duration(seconds: 25);
+import 'api_network.dart';
 
 class AuthException implements Exception {
   AuthException(this.message, {this.status});
@@ -39,7 +33,8 @@ class AuthService {
     return token != null && token.isNotEmpty;
   }
 
-  Future<void> saveSession({required String token, String? refreshToken}) async {
+  Future<void> saveSession(
+      {required String token, String? refreshToken}) async {
     await _storage.write(key: _tokenKey, value: token);
     if (refreshToken != null && refreshToken.isNotEmpty) {
       await _storage.write(key: _refreshKey, value: refreshToken);
@@ -61,7 +56,8 @@ class AuthService {
       value: jsonEncode({
         'email': email.trim().toLowerCase(),
         'password': password,
-        if (displayName != null && displayName.trim().isNotEmpty) 'display_name': displayName.trim(),
+        if (displayName != null && displayName.trim().isNotEmpty)
+          'display_name': displayName.trim(),
       }),
     );
   }
@@ -81,7 +77,8 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> login(String email, String password) async {
-    return _postJson('/login', {'email': email.trim().toLowerCase(), 'password': password});
+    return _postJson(
+        '/login', {'email': email.trim().toLowerCase(), 'password': password});
   }
 
   Future<Map<String, dynamic>> signup({
@@ -91,12 +88,14 @@ class AuthService {
     String? phone,
   }) async {
     final saltB64 = base64Encode(randomBytes(16));
-    await stashPendingSignup(email: email, password: password, displayName: displayName);
+    await stashPendingSignup(
+        email: email, password: password, displayName: displayName);
     return _postJson('/signup', {
       'email': email.trim().toLowerCase(),
       'password': password,
       'salt': saltB64,
-      if (displayName != null && displayName.trim().isNotEmpty) 'display_name': displayName.trim(),
+      if (displayName != null && displayName.trim().isNotEmpty)
+        'display_name': displayName.trim(),
       if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
       'email_redirect_to': ApiConfig.emailConfirmRedirect,
     });
@@ -142,7 +141,8 @@ class AuthService {
       };
     }
 
-    final err = q['error_description'] ?? frag['error_description'] ?? q['error'];
+    final err =
+        q['error_description'] ?? frag['error_description'] ?? q['error'];
     if (err != null && err.isNotEmpty) {
       throw AuthException(Uri.decodeComponent(err));
     }
@@ -167,21 +167,21 @@ class AuthService {
     }
   }
 
-  Future<Map<String, dynamic>> _postJson(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> _postJson(
+      String path, Map<String, dynamic> body) async {
     final uri = Uri.parse('${ApiConfig.apiRoot}$path');
     http.Response res;
     try {
-      res = await _client
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-            body: jsonEncode(body),
-          )
-          .timeout(_requestTimeout);
-    } on TimeoutException {
-      throw AuthException(
-        'Server is taking too long to respond (it may be waking up after being idle) — please try again.',
-      );
+      res = await withApiTimeout(_client.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: jsonEncode(body),
+      ));
+    } catch (e) {
+      rethrowNetworkFailure(e);
     }
     Map<String, dynamic>? decoded;
     try {

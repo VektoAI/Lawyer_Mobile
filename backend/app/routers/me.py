@@ -3,11 +3,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from app.config import get_settings
 from app.deps import current_user
-from app.schemas import ProfileUpdateBody
-from app.supabase_client import fetch_profile, update_profile_fields
+from app.rate_limit import account_key, limiter
+from app.schemas import DeleteAccountResponse, ProfileResponse, ProfileUpdateBody, SubscriptionResponse
+from app.supabase_client import supabase_client, update_profile_fields
 
 router = APIRouter(tags=["account"])
 
@@ -53,12 +55,12 @@ def _profile_full(user: dict[str, Any]) -> dict[str, Any]:
     return _profile_public(user)
 
 
-@router.get("/me")
+@router.get("/me", response_model=ProfileResponse)
 def me(user: dict[str, Any] = Depends(current_user)):
     return {"ok": True, **_profile_full(user)}
 
 
-@router.get("/me/subscription")
+@router.get("/me/subscription", response_model=SubscriptionResponse)
 def me_subscription(user: dict[str, Any] = Depends(current_user)):
     """Narrower than /me — just the fields a billing UI needs, not the full profile."""
     profile = _profile_full(user)
@@ -70,7 +72,7 @@ def me_subscription(user: dict[str, Any] = Depends(current_user)):
     }
 
 
-@router.patch("/me/profile")
+@router.patch("/me/profile", response_model=ProfileResponse)
 def patch_profile(body: ProfileUpdateBody, user: dict[str, Any] = Depends(current_user)):
     """Save chamber identity to Supabase profiles (not case data)."""
     if user.get("demo"):
@@ -105,3 +107,29 @@ def patch_profile(body: ProfileUpdateBody, user: dict[str, Any] = Depends(curren
     except RuntimeError as exc:
         raise HTTPException(500, str(exc)) from exc
     return {"ok": True, **_profile_public({**user, **fields}, row)}
+
+
+@router.delete("/me", response_model=DeleteAccountResponse)
+@limiter.limit(lambda: get_settings().rate_limit_delete_account, key_func=account_key)
+def delete_account(request: Request, user: dict[str, Any] = Depends(current_user)):
+    """Permanently delete the caller's own auth account + chamber profile.
+
+    Self-service only (scoped to the Bearer token's own user id — no admin
+    token, unlike /api/dev/purge-auth-users). Case data is device-only and
+    was never sent here, so there is nothing server-side to touch beyond the
+    account itself.
+    """
+    if user.get("demo"):
+        raise HTTPException(403, "Demo is a local showcase account — there is nothing to delete")
+
+    sb = supabase_client(service=True)
+    try:
+        sb.auth.admin.delete_user(user["id"])
+    except Exception as exc:
+        raise HTTPException(500, f"account deletion failed: {exc}") from exc
+    try:
+        sb.table("profiles").delete().eq("id", user["id"]).execute()
+    except Exception:
+        pass  # auth account is already gone; profile row cleanup is best-effort
+
+    return {"ok": True, "deleted": True}

@@ -6,8 +6,6 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../providers/app_providers.dart';
-
 /// Listens for `casevault://auth/confirm` (Supabase email verification).
 final authDeepLinkProvider = Provider<AuthDeepLinkNotifier>((ref) {
   final n = AuthDeepLinkNotifier(ref);

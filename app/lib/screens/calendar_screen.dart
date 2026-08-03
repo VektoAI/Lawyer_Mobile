@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../data/vault_store.dart';
+import '../models/case_models.dart';
 import '../providers/app_providers.dart';
 import '../theme.dart';
 import '../utils/dates.dart';
@@ -38,7 +38,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final vault = ref.watch(vaultStoreProvider);
-    final agenda = vault.listCases().where((c) => c.nextDate == _selectedIso).toList();
+    // Compute the (cached) case list and group by hearing date ONCE per
+    // build — _grid() used to call vault.listCases().where(...) once per
+    // day-in-month (~30 full list scans), on top of this one for the agenda.
+    final allCases = vault.listCases();
+    final byDate = <String, List<MunshiCase>>{};
+    for (final c in allCases) {
+      final d = c.nextDate;
+      if (d != null) (byDate[d] ??= []).add(c);
+    }
+    final agenda = byDate[_selectedIso] ?? const <MunshiCase>[];
 
     return Scaffold(
       backgroundColor: MunshiColors.ivory,
@@ -46,13 +55,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       body: Column(
         children: [
           _monthHeader(),
-          _grid(vault),
+          _grid(byDate),
           const Divider(height: 1),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Text('${fmtShort(_selectedIso)}', style: Theme.of(context).textTheme.titleMedium),
+                Text(fmtShort(_selectedIso), style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
                 if (agenda.isEmpty)
                   const Text('No hearings on this day')
@@ -94,7 +103,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  Widget _grid(VaultStore vault) {
+  Widget _grid(Map<String, List<MunshiCase>> byDate) {
     final first = DateTime(_month.year, _month.month, 1);
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
     final startWeekday = first.weekday % 7;
@@ -104,7 +113,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     }
     for (var d = 1; d <= daysInMonth; d++) {
       final iso = dayOffsetIsoFrom(_month.year, _month.month, d);
-      final dayCases = vault.listCases().where((c) => c.nextDate == iso);
+      final dayCases = byDate[iso] ?? const <MunshiCase>[];
       final hasHearing = dayCases.isNotEmpty;
       final hasUrgentHearing = dayCases.any((c) => c.urgent);
       final selected = iso == _selectedIso;

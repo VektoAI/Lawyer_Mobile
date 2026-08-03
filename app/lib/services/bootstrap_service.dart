@@ -1,10 +1,10 @@
-library;
-
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
+import 'api_network.dart';
 
 class BootstrapStatus {
   const BootstrapStatus({required this.ok, this.mode, this.message = ''});
@@ -17,7 +17,9 @@ class BootstrapStatus {
 Future<BootstrapStatus> fetchBootstrapStatus() async {
   for (final path in ['/api/healthz', '/healthz']) {
     try {
-      final res = await http.get(Uri.parse('${ApiConfig.baseUrl}$path')).timeout(const Duration(seconds: 5));
+      final res = await withApiTimeout(
+        http.get(Uri.parse('${ApiConfig.baseUrl}$path')),
+      );
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body) as Map<String, dynamic>?;
         return BootstrapStatus(
@@ -28,5 +30,6 @@ Future<BootstrapStatus> fetchBootstrapStatus() async {
       }
     } catch (_) {}
   }
-  return const BootstrapStatus(ok: false, message: 'API unreachable (offline OK for demo)');
+  return const BootstrapStatus(
+      ok: false, message: 'API unreachable (offline OK for demo)');
 }

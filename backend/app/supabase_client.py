@@ -1,6 +1,7 @@
 """Supabase client helpers — auth/billing profiles only."""
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any, Optional
 
 import httpx
@@ -30,6 +31,29 @@ def supabase_client(*, service: bool = False, settings: Optional[Settings] = Non
     else:
         key = settings.supabase_anon_key
     return create_client(settings.supabase_url, key)
+
+
+@lru_cache
+def _cached_anon_client(supabase_url: str, anon_key: str):
+    from supabase import create_client
+
+    return create_client(supabase_url, anon_key)
+
+
+def auth_verification_client(settings: Optional[Settings] = None):
+    """A long-lived anon-key client reserved for JWT verification.
+
+    `supabase_client()` above deliberately builds a fresh client per call —
+    fine when every call round-trips to Supabase anyway, but local JWT
+    verification (`GoTrueClient.get_claims`, see deps.py's `current_user`)
+    keeps its JWKS cache on the client instance itself. A fresh instance per
+    request would silently defeat that cache and re-fetch the JWKS every
+    time. Cached by (url, key) — same lru_cache pattern as
+    `config.get_settings` — so it stays a real singleton per deployment but
+    still picks up a changed key in tests that swap settings.
+    """
+    settings = require_supabase(settings)
+    return _cached_anon_client(settings.supabase_url, settings.supabase_anon_key)
 
 
 def fetch_profile(user_id: str, access_token: str, settings: Optional[Settings] = None) -> Optional[dict]:

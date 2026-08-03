@@ -47,6 +47,10 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  # Used only by test/vault_store_persist_test.dart to fake the documents
+  # directory so VaultStore's disk persistence can be exercised in a plain
+  # `flutter test` run without a real device/platform channel.
+  path_provider_platform_interface: ^2.1.2
 
 flutter:
   uses-material-design: true

@@ -1,0 +1,14 @@
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+# Pyflakes only (F): unused imports, unused variables, undefined names, dead
+# code. Deliberately not enabling pycodestyle/bugbear/bandit-style rules —
+# this codebase intentionally catches broad `except Exception` in several
+# places (see CLAUDE.md's "honest failure" invariant in court_lookup.py, and
+# deps.py's JWT-verification fallback) to distinguish "couldn't check" from
+# "checked, not found" rather than leaking a stack trace; a stricter,
+# opinionated ruleset would flag those as violations even though they're
+# deliberate, reviewed behavior.
+select = ["F"]

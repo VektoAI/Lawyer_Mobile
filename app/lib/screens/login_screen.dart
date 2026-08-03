@@ -43,7 +43,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final vault = ref.read(vaultStoreProvider);
       if (vault.hasLocalVault && !vault.isUnlocked) {
-        setState(() => _helpText = 'Enter your password to unlock cases on this device');
+        setState(() =>
+            _helpText = 'Enter your password to unlock cases on this device');
+      }
+      if (ApiConfig.isLocalDevApi) {
+        setState(() => _helpText =
+            'This build points at a local API (${ApiConfig.displayHost}) — '
+                'it will not work on a phone unless you rebuild with your Render URL.');
       }
       final pending = ref.read(authDeepLinkProvider).pendingUri.value;
       if (pending != null) _handleAuthCallbackUri(pending);
@@ -64,7 +70,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  Future<void> _finishSession(Map<String, dynamic> r, {required bool demo, required String password}) async {
+  Future<void> _finishSession(Map<String, dynamic> r,
+      {required bool demo, required String password}) async {
     final token = r['token'] as String?;
     if (token != null && token.isNotEmpty) {
       await ref.read(authServiceProvider).saveSession(
@@ -84,7 +91,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final salt = r['salt'] as String?;
       final name = (r['display_name'] as String?)?.trim() ?? _name.text.trim();
       final profile = name.isNotEmpty
-          ? ChamberProfile(name: name, initials: name.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).map((w) => w[0]).take(2).join().toUpperCase())
+          ? ChamberProfile(
+              name: name,
+              initials: name
+                  .split(RegExp(r'\s+'))
+                  .where((w) => w.isNotEmpty)
+                  .map((w) => w[0])
+                  .take(2)
+                  .join()
+                  .toUpperCase())
           : null;
 
       if (vault.hasLocalVault) {
@@ -114,7 +129,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
         if (mounted) await showRecoveryKeyDialog(context, recovery);
       } else {
-        throw StateError('Account setup incomplete — contact support or register again');
+        throw StateError(
+            'Account setup incomplete — contact support or register again');
       }
     }
     notifyRouterVaultChanged();
@@ -124,7 +140,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<Map<String, dynamic>> _enrichSession(Map<String, dynamic> r) async {
-    if (r['salt'] != null && (r['salt'] as String).isNotEmpty && r['user_id'] != null) return r;
+    if (r['salt'] != null &&
+        (r['salt'] as String).isNotEmpty &&
+        r['user_id'] != null) {
+      return r;
+    }
     final token = r['token'] as String?;
     if (token == null || token.isEmpty) return r;
     await ref.read(authServiceProvider).saveSession(
@@ -204,7 +224,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           displayName: _name.text.trim(),
           phone: _phone.text.trim(),
         );
-        final needsConfirm = r['needs_email_confirm'] == true && r['token'] == null;
+        final needsConfirm =
+            r['needs_email_confirm'] == true && r['token'] == null;
         if (needsConfirm) {
           setState(() {
             _mode = _AuthMode.login;
@@ -224,8 +245,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await _afterAuth(r, demo: r['demo'] == true);
     } on AuthException catch (e) {
       _toast(e.message);
+    } on StateError catch (e) {
+      // Local vault/crypto errors (e.g. wrong password) — not a network
+      // failure, so don't blame the server for it.
+      _toast(e.message);
     } catch (e) {
-      _toast('Could not reach the server (${ApiConfig.displayHost}). Check network or API URL.');
+      _toast(
+          'Could not reach the server (${ApiConfig.displayHost}). Check network or API URL.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -242,13 +268,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       try {
         r = await ref.read(authServiceProvider).demoLogin();
       } catch (_) {
-        r = {'token': 'demo-local-vault', 'demo': true, 'user_id': 'demo-local'};
+        r = {
+          'token': 'demo-local-vault',
+          'demo': true,
+          'user_id': 'demo-local'
+        };
       }
       await _afterAuth(r, demo: true);
     } on AuthException catch (e) {
       _toast(e.message);
     } catch (e) {
-      _toast('Demo unavailable — check API at ${ApiConfig.displayHost} or use offline demo fallback');
+      _toast(
+          'Demo unavailable — check API at ${ApiConfig.displayHost} or use offline demo fallback');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -281,7 +312,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
             child: const Text('Recover'),
@@ -312,7 +344,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   static const _resendCooldown = Duration(seconds: 45);
 
   bool get _resendOnCooldown =>
-      _resendCooldownUntil != null && DateTime.now().isBefore(_resendCooldownUntil!);
+      _resendCooldownUntil != null &&
+      DateTime.now().isBefore(_resendCooldownUntil!);
 
   Future<void> _resendConfirm() async {
     final email = _email.text.trim().toLowerCase();
@@ -370,7 +403,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       decoration: BoxDecoration(
                         color: MunshiColors.brassGold.withValues(alpha: 0.25),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: MunshiColors.brassGold.withValues(alpha: 0.5)),
+                        border: Border.all(
+                            color:
+                                MunshiColors.brassGold.withValues(alpha: 0.5)),
                       ),
                       alignment: Alignment.center,
                       child: const Text('⚖', style: TextStyle(fontSize: 24)),
@@ -382,7 +417,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         children: [
                           Text(
                             'Case Vault',
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(
                                   color: Colors.white,
                                   fontFamily: 'Fraunces',
                                   fontWeight: FontWeight.w700,
@@ -390,7 +428,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                           Text(
                             'Never miss a hearing date',
-                            style: TextStyle(color: Colors.white.withValues(alpha: 0.82), fontSize: 14),
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.82),
+                                fontSize: 14),
                           ),
                         ],
                       ),
@@ -400,13 +440,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               Flexible(
                 flex: 2,
-                child: Center(child: LoginHeroArt(key: ValueKey(MediaQuery.sizeOf(context).width))),
+                child: Center(
+                    child: LoginHeroArt(
+                        key: ValueKey(MediaQuery.sizeOf(context).width))),
               ),
               Expanded(
                 flex: 5,
                 child: Material(
                   color: MunshiColors.ivory,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(28)),
                   clipBehavior: Clip.antiAlias,
                   elevation: 8,
                   shadowColor: Colors.black26,
@@ -417,8 +460,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       children: [
                         SegmentedButton<_AuthMode>(
                           segments: const [
-                            ButtonSegment(value: _AuthMode.login, label: Text('Sign in')),
-                            ButtonSegment(value: _AuthMode.signup, label: Text('Register')),
+                            ButtonSegment(
+                                value: _AuthMode.login, label: Text('Sign in')),
+                            ButtonSegment(
+                                value: _AuthMode.signup,
+                                label: Text('Register')),
                           ],
                           selected: {_mode},
                           onSelectionChanged: _busy
@@ -432,28 +478,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     }
                                   }),
                           style: ButtonStyle(
-                            foregroundColor: WidgetStateProperty.resolveWith((states) {
-                              if (states.contains(WidgetState.selected)) return Colors.white;
+                            foregroundColor:
+                                WidgetStateProperty.resolveWith((states) {
+                              if (states.contains(WidgetState.selected)) {
+                                return Colors.white;
+                              }
                               return MunshiColors.inkGreen;
                             }),
-                            backgroundColor: WidgetStateProperty.resolveWith((states) {
-                              if (states.contains(WidgetState.selected)) return MunshiColors.inkGreen;
+                            backgroundColor:
+                                WidgetStateProperty.resolveWith((states) {
+                              if (states.contains(WidgetState.selected)) {
+                                return MunshiColors.inkGreen;
+                              }
                               return Colors.transparent;
                             }),
                           ),
                         ),
                         const SizedBox(height: 20),
                         Text(
-                          isSignup ? 'Create your chamber account' : 'Welcome back',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: MunshiColors.inkGreen,
-                              ),
+                          isSignup
+                              ? 'Create your chamber account'
+                              : 'Welcome back',
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: MunshiColors.inkGreen,
+                                  ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Cases stay encrypted on this phone. Server handles sign-in and court lookups only.',
-                          style: TextStyle(fontSize: 13, color: Colors.grey.shade700, height: 1.35),
+                          'Your case data is encrypted on this device and never leaves it. Our servers only handle sign-in and public court lookups.',
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade700,
+                              height: 1.35),
                         ),
                         if (_helpText != null) ...[
                           const SizedBox(height: 12),
@@ -462,24 +520,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             decoration: BoxDecoration(
                               color: const Color(0xFFF6EEDD),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: MunshiColors.brassGold.withValues(alpha: 0.35)),
+                              border: Border.all(
+                                  color: MunshiColors.brassGold
+                                      .withValues(alpha: 0.35)),
                             ),
-                            child: Text(_helpText!, style: const TextStyle(fontSize: 13, height: 1.4)),
+                            child: Text(_helpText!,
+                                style:
+                                    const TextStyle(fontSize: 13, height: 1.4)),
                           ),
                         ],
                         const SizedBox(height: 16),
                         TextField(
                           controller: _email,
                           keyboardType: TextInputType.emailAddress,
-                          autofillHints: const [AutofillHints.username, AutofillHints.email],
-                          decoration: const InputDecoration(labelText: 'Work email'),
+                          autofillHints: const [
+                            AutofillHints.username,
+                            AutofillHints.email
+                          ],
+                          decoration:
+                              const InputDecoration(labelText: 'Work email'),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: _password,
                           obscureText: true,
                           autofillHints: const [AutofillHints.password],
-                          decoration: const InputDecoration(labelText: 'Password'),
+                          decoration:
+                              const InputDecoration(labelText: 'Password'),
                           onSubmitted: (_) => _busy ? null : _submit(),
                         ),
                         if (!isSignup)
@@ -495,39 +562,54 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           TextField(
                             controller: _name,
                             autofillHints: const [AutofillHints.name],
-                            decoration: const InputDecoration(labelText: 'Advocate name'),
+                            decoration: const InputDecoration(
+                                labelText: 'Advocate name'),
                           ),
                           const SizedBox(height: 12),
                           TextField(
                             controller: _phone,
                             keyboardType: TextInputType.phone,
-                            autofillHints: const [AutofillHints.telephoneNumber],
-                            decoration: const InputDecoration(labelText: 'Mobile (WhatsApp reminders)'),
+                            autofillHints: const [
+                              AutofillHints.telephoneNumber
+                            ],
+                            decoration: const InputDecoration(
+                                labelText: 'Mobile (WhatsApp reminders)'),
                           ),
                         ],
                         const SizedBox(height: 20),
                         FilledButton(
                           onPressed: _busy ? null : _submit,
-                          child: Text(_busy ? 'Please wait…' : (isSignup ? 'Create account' : 'Sign in')),
+                          child: Text(_busy
+                              ? 'Please wait…'
+                              : (isSignup ? 'Create account' : 'Sign in')),
                         ),
                         if (!isSignup) ...[
                           const SizedBox(height: 8),
                           TextButton(
-                            onPressed: (_busy || _resendOnCooldown) ? null : _resendConfirm,
+                            onPressed: (_busy || _resendOnCooldown)
+                                ? null
+                                : _resendConfirm,
                             child: Text(
-                              _resendOnCooldown ? 'Sent — check your inbox' : ProductCopy.resendVerification,
+                              _resendOnCooldown
+                                  ? 'Sent — check your inbox'
+                                  : ProductCopy.resendVerification,
                             ),
                           ),
                         ],
                         const SizedBox(height: 16),
                         Row(
                           children: [
-                            Expanded(child: Divider(color: Colors.grey.shade400)),
+                            Expanded(
+                                child: Divider(color: Colors.grey.shade400)),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              child: Text('or', style: TextStyle(color: Colors.grey.shade600)),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              child: Text('or',
+                                  style:
+                                      TextStyle(color: Colors.grey.shade600)),
                             ),
-                            Expanded(child: Divider(color: Colors.grey.shade400)),
+                            Expanded(
+                                child: Divider(color: Colors.grey.shade400)),
                           ],
                         ),
                         const SizedBox(height: 12),
@@ -540,7 +622,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 ProductCopy.guestAccessHint,
-                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.grey.shade600),
                               ),
                             ],
                           ),
@@ -549,7 +632,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         Text(
                           'API: ${ApiConfig.displayHost}',
                           textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                          style: TextStyle(
+                              fontSize: 11, color: Colors.grey.shade500),
+                        ),
+                        Center(
+                          child: TextButton(
+                            onPressed: () => context.push('/privacy'),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                            ),
+                            child: Text('Privacy Policy',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600)),
+                          ),
                         ),
                         if (_recoveryKey != null) ...[
                           const SizedBox(height: 12),
@@ -559,7 +656,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               color: const Color(0xFFF6EEDD),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Text(_recoveryKey!, style: const TextStyle(fontSize: 12.5, height: 1.45)),
+                            child: Text(_recoveryKey!,
+                                style: const TextStyle(
+                                    fontSize: 12.5, height: 1.45)),
                           ),
                         ],
                       ],

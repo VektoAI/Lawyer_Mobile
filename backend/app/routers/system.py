@@ -1,16 +1,20 @@
 """Health and public config."""
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 
 from app.config import get_settings
+from app.schemas import HealthResponse, PublicConfigResponse
 
 router = APIRouter(tags=["system"])
 
+_started_at = time.time()
 
-@router.get("/healthz")
+
+@router.get("/healthz", response_model=HealthResponse)
 def healthz():
     settings = get_settings()
     return {
@@ -20,10 +24,11 @@ def healthz():
         "supabase": settings.supabase_configured,
         "demo": settings.demo_open,
         "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "uptime_seconds": round(time.time() - _started_at, 1),
     }
 
 
-@router.get("/api/config")
+@router.get("/api/config", response_model=PublicConfigResponse)
 def public_config():
     settings = get_settings()
     return {

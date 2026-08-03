@@ -78,7 +78,7 @@ class VaultCrypto {
   /// "Bitwarden-style" recovery key (vault.js:105-108). Losing both the
   /// password and this key is unrecoverable by design; there is no
   /// server-side escrow.
-  static String generateRecoveryKeyHex() => hex.encode(randomBytes(32));
+  static String generateRecoveryKeyHex() => HexCodec.encode(randomBytes(32));
 
   static Future<CipherEnvelope> wrapDataKey(SecretKey dataKey, SecretKey wrappingKey) async {
     final raw = await dataKey.extractBytes();
@@ -117,7 +117,7 @@ class VaultCrypto {
 }
 
 /// Minimal hex codec so this file has no extra dependency beyond `cryptography`.
-class hex {
+class HexCodec {
   static String encode(List<int> bytes) =>
       bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 }

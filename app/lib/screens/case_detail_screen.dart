@@ -1,8 +1,13 @@
 library;
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../data/vault_store.dart';
 import '../models/case_models.dart';
@@ -10,6 +15,8 @@ import '../providers/app_providers.dart';
 import '../copy/product_copy.dart';
 import '../theme.dart';
 import '../utils/dates.dart';
+import '../utils/error_text.dart';
+import '../utils/perf_log.dart';
 import '../utils/rupee.dart';
 import '../widgets/case_widgets.dart';
 import '../widgets/munshi_app_bar.dart';
@@ -119,10 +126,13 @@ class _CaseDetailScreenState extends ConsumerState<CaseDetailScreen> with Single
     return Column(
       children: [
         Expanded(
-          child: ListView(
-            children: [
-              for (final u in c.updates) ChatBubble(update: u),
-            ],
+          // A case's event log grows for the life of the matter — years of
+          // hearings/notes/payments can add up to hundreds of entries.
+          // ListView.builder only builds the bubbles actually on/near
+          // screen instead of the whole history at once.
+          child: ListView.builder(
+            itemCount: c.updates.length,
+            itemBuilder: (context, i) => ChatBubble(update: c.updates[i]),
           ),
         ),
         if (!vault.readOnly)
@@ -181,41 +191,105 @@ class _CaseDetailScreenState extends ConsumerState<CaseDetailScreen> with Single
   }
 
   Widget _docsTab(VaultStore vault, MunshiCase c) {
-    return ListView(
-      children: [
-        if (!vault.readOnly)
-          ListTile(
+    final showAddTile = !vault.readOnly;
+    final offset = showAddTile ? 1 : 0;
+    return ListView.builder(
+      itemCount: c.docs.length + offset,
+      itemBuilder: (context, i) {
+        if (showAddTile && i == 0) {
+          return ListTile(
             leading: const Icon(Icons.upload_file),
             title: const Text('Add document'),
             onTap: () => showAddDocToCaseSheet(context, ref, c.id),
-          ),
-        ...c.docs.map(
-          (d) => ListTile(
-            leading: Icon(d.pdf ? Icons.picture_as_pdf : Icons.table_chart),
-            title: Text(d.name),
-            subtitle: Text('${d.size} · ${d.date}'),
-          ),
-        ),
-      ],
+          );
+        }
+        final d = c.docs[i - offset];
+        return ListTile(
+          key: ValueKey(d.id ?? d.name),
+          leading: Icon(d.pdf ? Icons.picture_as_pdf : Icons.table_chart),
+          title: Text(d.name),
+          subtitle: Text('${d.size} · ${d.date}'),
+          onTap: () => _openDocument(vault, d),
+        );
+      },
     );
   }
 
+  /// Decrypts the stored document and hands it to the OS share sheet so the
+  /// lawyer can view it in any installed viewer — same "decrypt to a temp
+  /// file, then share" mechanism already used for encrypted backup export
+  /// (see vault_backup_ui.dart's exportVaultBackup). Unlike that export,
+  /// this writes plaintext case content, so the temp file is always cleaned
+  /// up afterward (see `finally` below) — the delete only runs once
+  /// `Share.shareXFiles` has itself completed, never before.
+  Future<void> _openDocument(VaultStore vault, CaseDocument d) async {
+    final docId = d.id;
+    if (docId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This document has no file attached — it was added before file storage was supported.')),
+      );
+      return;
+    }
+    File? tempFile;
+    try {
+      await PerfLog.timeAsync('document.open', () async {
+        final bytes = await vault.decryptDocumentBytes(d);
+        final dir = await getTemporaryDirectory();
+        // Named from the document's UUID, never the user-entered display
+        // name — only the extension is taken from it, so it's never used as
+        // a path.
+        tempFile = File('${dir.path}/$docId${p.extension(d.name)}');
+        await tempFile!.writeAsBytes(bytes);
+        await Share.shareXFiles([XFile(tempFile!.path)], text: d.name);
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open this document: ${friendlyError(e)}')));
+      }
+    } finally {
+      final file = tempFile;
+      if (file != null && await file.exists()) {
+        try {
+          await file.delete();
+        } catch (_) {}
+      }
+    }
+  }
+
   Widget _feesTab(VaultStore vault, MunshiCase c) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Text('Agreed ${rupee(c.fee.agreed)} · Collected ${rupee(c.collectedRupees)} · Due ${rupee(c.dueRupees)}'),
-        const SizedBox(height: 12),
-        if (!vault.readOnly) ...[
-          OutlinedButton(onPressed: () => showFeeAgreedSheet(context, ref, c.id), child: const Text('Set fee agreed')),
-          OutlinedButton(onPressed: () => showPaymentSheet(context, ref, caseId: c.id), child: const Text('Record payment')),
-        ],
-        const Divider(),
-        ...c.payments.map(
-          (p) => ListTile(
-            title: Text('${rupee(p.amount)} · ${p.mode}'),
-            subtitle: Text(p.note),
-            trailing: Text(p.date, style: const TextStyle(fontSize: 12)),
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.all(16),
+          sliver: SliverMainAxisGroup(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Agreed ${rupee(c.fee.agreed)} · Collected ${rupee(c.collectedRupees)} · Due ${rupee(c.dueRupees)}'),
+                    const SizedBox(height: 12),
+                    if (!vault.readOnly) ...[
+                      OutlinedButton(onPressed: () => showFeeAgreedSheet(context, ref, c.id), child: const Text('Set fee agreed')),
+                      OutlinedButton(onPressed: () => showPaymentSheet(context, ref, caseId: c.id), child: const Text('Record payment')),
+                    ],
+                    const Divider(),
+                  ],
+                ),
+              ),
+              SliverList.builder(
+                itemCount: c.payments.length,
+                itemBuilder: (context, i) {
+                  final p = c.payments[i];
+                  return ListTile(
+                    key: ValueKey(p.id),
+                    title: Text('${rupee(p.amount)} · ${p.mode}'),
+                    subtitle: Text(p.note),
+                    trailing: Text(p.date, style: const TextStyle(fontSize: 12)),
+                  );
+                },
+              ),
+            ],
           ),
         ),
       ],

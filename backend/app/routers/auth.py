@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import logging
 from html import escape
 from urllib.parse import urlencode
 
@@ -10,11 +11,23 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 
 from app.config import get_settings
-from app.deps import DEMO_SALT, DEMO_TOKEN, demo_session_payload
-from app.schemas import ConfirmBody, LoginBody, RefreshBody, ResendBody, SignupBody
+from app.deps import DEMO_TOKEN, demo_session_payload
+from app.logging_config import mask_email
+from app.rate_limit import limiter
+from app.schemas import (
+    AuthSessionResponse,
+    ConfirmBody,
+    LoginBody,
+    PurgeUsersResponse,
+    RefreshBody,
+    ResendBody,
+    ResendConfirmResponse,
+    SignupBody,
+)
 from app.supabase_client import ensure_profile, fetch_profile, supabase_client
 
 router = APIRouter(tags=["auth"])
+log = logging.getLogger("munshi.auth")
 
 _KEEP_EMAILS = {"demo@localhost", "demo@munshi.local"}
 
@@ -65,8 +78,9 @@ def _session_payload(user, session, email: str, salt: str | None = None, plan: s
     }
 
 
-@router.post("/signup")
-def signup(body: SignupBody, request: Request):
+@router.post("/signup", response_model=AuthSessionResponse)
+@limiter.limit(lambda: get_settings().rate_limit_signup)
+def signup(request: Request, body: SignupBody):
     """Create account. Case data stays on the user's device only."""
     email = body.email.strip().lower()
     if email in _KEEP_EMAILS:
@@ -166,7 +180,7 @@ def _verify_otp_and_confirm(token_hash: str, kind: str):
     return user, session, email, salt
 
 
-@router.post("/auth/confirm")
+@router.post("/auth/confirm", response_model=AuthSessionResponse)
 def confirm_email(body: ConfirmBody):
     """Exchange Supabase email token_hash for a session (raw casevault:// link, app-side)."""
     try:
@@ -297,8 +311,9 @@ def confirm_email_page(token_hash: str = "", otp_type: str = Query("signup", ali
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
-@router.post("/auth/resend-confirm")
-def resend_confirm(body: ResendBody, request: Request):
+@router.post("/auth/resend-confirm", response_model=ResendConfirmResponse)
+@limiter.limit(lambda: get_settings().rate_limit_resend_confirm)
+def resend_confirm(request: Request, body: ResendBody):
     """Resend signup confirmation email. Sign-in never sends mail."""
     email = body.email.strip().lower()
     if not email or "@" not in email:
@@ -324,8 +339,9 @@ def resend_confirm(body: ResendBody, request: Request):
     }
 
 
-@router.post("/login")
-def login(body: LoginBody):
+@router.post("/login", response_model=AuthSessionResponse)
+@limiter.limit(lambda: get_settings().rate_limit_login)
+def login(request: Request, body: LoginBody):
     """Email + password → JWT. Does NOT send email."""
     email = body.email.strip().lower()
     if not email or not body.password:
@@ -346,13 +362,13 @@ def login(body: LoginBody):
     except HTTPException:
         raise
     except Exception as exc:
-        print(f"[login] supabase client failed: {exc!r}", flush=True)
+        log.error("supabase client unavailable during login", extra={"error": repr(exc)})
         raise HTTPException(503, f"Auth service unavailable: {exc}") from exc
 
     try:
         res = sb.auth.sign_in_with_password({"email": email, "password": body.password})
     except Exception as exc:
-        print(f"[login] supabase error for {email}: {exc!r}", flush=True)
+        log.warning("login failed", extra={"email": mask_email(email), "error": repr(exc)})
         if _is_unconfirmed_error(exc):
             raise HTTPException(
                 403,
@@ -364,7 +380,7 @@ def login(body: LoginBody):
         session = res.session
         user = res.user
         if not session or not user:
-            print(f"[login] no session for {email}", flush=True)
+            log.warning("login succeeded at Supabase but no session/user returned", extra={"email": mask_email(email)})
             raise HTTPException(401, "invalid email or password")
 
         profile = fetch_profile(user.id, session.access_token)
@@ -375,7 +391,7 @@ def login(body: LoginBody):
                 "Account setup incomplete on the server. Sign up again on this browser, or restore a backup.",
             )
         plan = (profile or {}).get("plan") or (user.app_metadata or {}).get("plan") or "free"
-        print(f"[login] ok {email} plan={plan}", flush=True)
+        log.info("login ok", extra={"email": mask_email(email), "plan": plan})
 
         return {
             "ok": True,
@@ -390,12 +406,12 @@ def login(body: LoginBody):
         raise
     except Exception as exc:
         # Never leak a bare 500 — surface the reason for local debugging
-        print(f"[login] unexpected error for {email}: {exc!r}", flush=True)
+        log.error("unexpected login error", extra={"email": mask_email(email), "error": repr(exc)})
         raise HTTPException(500, f"Login failed: {exc}") from exc
 
 
 
-@router.post("/auth/demo")
+@router.post("/auth/demo", response_model=AuthSessionResponse)
 def auth_demo():
     """One-tap showcase chamber. Cases seed locally and stay view-only in the UI.
 
@@ -406,7 +422,7 @@ def auth_demo():
     return demo_session_payload()
 
 
-@router.post("/auth/refresh")
+@router.post("/auth/refresh", response_model=AuthSessionResponse)
 def refresh(body: RefreshBody):
     refresh_token = body.refresh_token.strip()
     if not refresh_token:
@@ -445,7 +461,7 @@ def require_admin_token(x_admin_token: str | None = Header(default=None, alias="
         raise HTTPException(401, "invalid admin token")
 
 
-@router.post("/dev/purge-auth-users")
+@router.post("/dev/purge-auth-users", response_model=PurgeUsersResponse)
 def purge_auth_users(_auth=Depends(require_admin_token)):
     """Delete every Supabase Auth user except local demo addresses.
 

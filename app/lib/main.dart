@@ -15,6 +15,7 @@ import 'screens/docs_screen.dart';
 import 'screens/fees_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_shell.dart';
+import 'screens/privacy_policy_screen.dart';
 import 'screens/profile_screen.dart';
 import 'theme.dart';
 import 'widgets/auth_deep_link_host.dart';
@@ -79,13 +80,18 @@ final _router = GoRouter(
       path: '/archived',
       builder: (_, __) => const ArchivedScreen(),
     ),
+    GoRoute(
+      parentNavigatorKey: _rootNavKey,
+      path: '/privacy',
+      builder: (_, __) => const PrivacyPolicyScreen(),
+    ),
   ],
   redirect: (context, state) {
     final loc = state.matchedLocation;
     final container = ProviderScope.containerOf(context);
     final vault = container.read(vaultStoreProvider);
     if (loc == '/login' && vault.isUnlocked) return '/cases';
-    if (loc == '/login') return null;
+    if (loc == '/login' || loc == '/privacy') return null;
     if (!vault.isUnlocked) return '/login';
     return null;
   },
@@ -98,7 +104,7 @@ class MunshiMobileApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Case Vault (internal)',
+      title: 'Case Vault',
       theme: munshiTheme(),
       routerConfig: _router,
       debugShowCheckedModeBanner: false,

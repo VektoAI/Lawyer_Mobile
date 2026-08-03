@@ -9,8 +9,11 @@
 /// file, unlike vault.js's per-blob AES-GCM. Money is integer rupees
 /// (invariant 6) — never a REAL/float column.
 ///
-/// NOT runnable yet in this environment (no Dart/Flutter SDK) — after
-/// `flutter pub get`, generate `app_database.g.dart` with:
+/// Not wired into the running app (see CLAUDE.md) and, as of this comment,
+/// will not compile even in isolation: `pubspec.yaml` does not declare
+/// `drift`, `sqlite3`, or `sqlcipher_flutter_libs`, all imported below.
+/// Before building on this schema, add those dependencies, then regenerate
+/// `app_database.g.dart` with:
 ///   dart run build_runner build --delete-conflicting-outputs
 library;
 

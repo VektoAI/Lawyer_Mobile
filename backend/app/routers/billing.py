@@ -6,12 +6,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 
 from app.config import get_settings
+from app.schemas import StripeWebhookResponse
 from app.supabase_client import supabase_client
 
 router = APIRouter(tags=["billing"])
 
 
-@router.post("/stripe/webhook")
+@router.post("/stripe/webhook", response_model=StripeWebhookResponse)
 async def stripe_webhook(request: Request):
     """Stripe → update profiles.plan only. No case fields exist to touch."""
     settings = get_settings()

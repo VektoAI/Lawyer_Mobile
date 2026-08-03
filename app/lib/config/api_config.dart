@@ -12,6 +12,9 @@ class ApiConfig {
 
   static String get apiRoot => '$baseUrl/api';
 
+  /// Render free tier cold starts can take 30–50s; keep all API calls consistent.
+  static const requestTimeout = Duration(seconds: 60);
+
   /// Supabase email-confirm redirect — must match Supabase Dashboard → Auth → URL configuration.
   static const emailConfirmRedirect = String.fromEnvironment(
     'MUNSHI_AUTH_REDIRECT',
@@ -23,6 +26,24 @@ class ApiConfig {
       return Uri.parse(baseUrl).host;
     } catch (_) {
       return baseUrl;
+    }
+  }
+
+  /// True when APK was built without a production API URL (won't work on a physical phone).
+  static bool get isLocalDevApi {
+    final host = displayHost.toLowerCase();
+    return host == 'localhost' ||
+        host == '127.0.0.1' ||
+        host == '10.0.2.2' ||
+        host.startsWith('192.168.') ||
+        host.startsWith('10.');
+  }
+
+  static bool get usesHttps {
+    try {
+      return Uri.parse(baseUrl).scheme == 'https';
+    } catch (_) {
+      return false;
     }
   }
 }

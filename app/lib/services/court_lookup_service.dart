@@ -1,21 +1,18 @@
-/// Authenticated API calls — Render-hosted backend (`../backend/app/main.py`).
 library;
 
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
+import 'api_network.dart';
 import 'auth_service.dart';
 
-/// See auth_service.dart's `_requestTimeout` — same reasoning: fail fast and
-/// clearly instead of hanging on a stalled/cold-starting connection.
-const _requestTimeout = Duration(seconds: 25);
-
 class ApiClient {
-  ApiClient({http.Client? client, AuthService? auth}) : _client = client ?? http.Client(), _auth = auth ?? AuthService();
+  ApiClient({http.Client? client, AuthService? auth})
+      : _client = client ?? http.Client(),
+        _auth = auth ?? AuthService();
 
   final http.Client _client;
   final AuthService _auth;
@@ -33,7 +30,8 @@ class ApiClient {
     };
   }
 
-  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> post(
+      String path, Map<String, dynamic> body) async {
     return _withRefresh((headers) => _client.post(
           Uri.parse('${ApiConfig.apiRoot}$path'),
           headers: {...headers, 'Content-Type': 'application/json'},
@@ -42,10 +40,17 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> get(String path) async {
-    return _withRefresh((headers) => _client.get(Uri.parse('${ApiConfig.apiRoot}$path'), headers: headers));
+    return _withRefresh((headers) =>
+        _client.get(Uri.parse('${ApiConfig.apiRoot}$path'), headers: headers));
   }
 
-  Future<Map<String, dynamic>> patch(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> delete(String path) async {
+    return _withRefresh((headers) =>
+        _client.delete(Uri.parse('${ApiConfig.apiRoot}$path'), headers: headers));
+  }
+
+  Future<Map<String, dynamic>> patch(
+      String path, Map<String, dynamic> body) async {
     return _withRefresh((headers) => _client.patch(
           Uri.parse('${ApiConfig.apiRoot}$path'),
           headers: {...headers, 'Content-Type': 'application/json'},
@@ -53,15 +58,18 @@ class ApiClient {
         ));
   }
 
-  Future<http.Response> _send(Future<http.Response> Function(Map<String, String> headers) send, Map<String, String> headers) async {
+  Future<http.Response> _send(
+      Future<http.Response> Function(Map<String, String> headers) send,
+      Map<String, String> headers) async {
     try {
-      return await send(headers).timeout(_requestTimeout);
-    } on TimeoutException {
-      throw Exception('Request timed out — check your connection and try again.');
+      return await withApiTimeout(send(headers));
+    } catch (e) {
+      rethrowNetworkFailure(e);
     }
   }
 
-  Future<Map<String, dynamic>> _withRefresh(Future<http.Response> Function(Map<String, String> headers) send) async {
+  Future<Map<String, dynamic>> _withRefresh(
+      Future<http.Response> Function(Map<String, String> headers) send) async {
     var headers = await _authHeaders();
     var res = await _send(send, headers);
     if (res.statusCode == 401) {
@@ -106,7 +114,8 @@ class CourtLookupResult {
   final String? nextDate;
   final String? warning;
 
-  factory CourtLookupResult.fromJson(Map<String, dynamic> j) => CourtLookupResult(
+  factory CourtLookupResult.fromJson(Map<String, dynamic> j) =>
+      CourtLookupResult(
         found: j['found'] == true,
         parties: j['parties'] as String?,
         stage: j['stage'] as String?,
@@ -138,7 +147,9 @@ Future<Map<String, dynamic>> syncCourtHearings({
 }) async {
   return api.post('/courts/sync-hearings', {
     'cases': cases,
-    if (advocateName != null && advocateName.isNotEmpty) 'advocate_name': advocateName,
-    if (scanCourtIds != null && scanCourtIds.isNotEmpty) 'scan_court_ids': scanCourtIds,
+    if (advocateName != null && advocateName.isNotEmpty)
+      'advocate_name': advocateName,
+    if (scanCourtIds != null && scanCourtIds.isNotEmpty)
+      'scan_court_ids': scanCourtIds,
   });
 }

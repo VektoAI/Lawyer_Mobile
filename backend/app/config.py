@@ -63,6 +63,19 @@ class Settings:
             os.environ.get("MUNSHI_MOBILE_AUTH_REDIRECT") or "casevault://auth/confirm"
         ).strip()
 
+        # Rate limiting (see app/rate_limit.py) — per-IP/per-account budgets
+        # for the handful of unauthenticated-or-destructive endpoints where
+        # abuse actually matters (login, signup, resend-confirm, delete
+        # account). Strings use slowapi/limits syntax, e.g. "5/minute".
+        self.rate_limit_enabled = os.environ.get("MUNSHI_RATE_LIMIT_ENABLED", "1") == "1"
+        self.rate_limit_login = os.environ.get("MUNSHI_RATE_LIMIT_LOGIN", "10/minute")
+        self.rate_limit_signup = os.environ.get("MUNSHI_RATE_LIMIT_SIGNUP", "5/minute")
+        self.rate_limit_resend_confirm = os.environ.get("MUNSHI_RATE_LIMIT_RESEND_CONFIRM", "3/minute")
+        self.rate_limit_delete_account = os.environ.get("MUNSHI_RATE_LIMIT_DELETE_ACCOUNT", "3/hour")
+
+        # Observability (see app/logging_config.py, app/factory.py's request middleware).
+        self.slow_request_threshold_ms = int(os.environ.get("MUNSHI_SLOW_REQUEST_MS", "1000"))
+
     @property
     def supabase_configured(self) -> bool:
         return bool(self.supabase_url and self.supabase_anon_key)

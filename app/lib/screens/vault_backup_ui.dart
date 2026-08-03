@@ -14,13 +14,14 @@ import '../providers/app_providers.dart';
 import '../router_refresh.dart';
 import '../services/bootstrap_service.dart';
 import '../utils/dates.dart';
+import '../utils/error_text.dart';
 
 Future<void> exportVaultBackup(BuildContext context, WidgetRef ref) async {
   final vault = ref.read(vaultStoreProvider);
   try {
     final backup = await vault.exportPwaBackup();
     final json = const JsonEncoder.withIndent('  ').convert(backup);
-    final name = 'munshi-vault-backup-$todayIso.json';
+    final name = 'case-vault-backup-$todayIso.json';
     if (Platform.isAndroid || Platform.isIOS) {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/$name');
@@ -34,7 +35,7 @@ Future<void> exportVaultBackup(BuildContext context, WidgetRef ref) async {
     }
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not create the backup: ${friendlyError(e)}')));
     }
   }
 }
@@ -76,7 +77,7 @@ Future<void> importVaultBackup(BuildContext context, WidgetRef ref) async {
     }
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Import failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not restore this backup: ${friendlyError(e)}')));
     }
   }
 }

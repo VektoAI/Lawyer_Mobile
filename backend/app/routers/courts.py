@@ -6,20 +6,20 @@ import json
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.deps import current_user
-from app.schemas import CaseLookupBody, SyncHearingsBody
+from app.schemas import CaseLookupBody, CourtsListResponse, DynamicResponse, SyncHearingsBody
 from app.services.court_lookup import PUBLIC_COURTS, lookup_case, sync_hearings
 from app.services.ecourts_parse import match_cases_on_entries, parse_causelist_file
 
 router = APIRouter(tags=["courts"])
 
 
-@router.get("/courts")
+@router.get("/courts", response_model=CourtsListResponse)
 def list_courts(_user=Depends(current_user)):
     """Court pickers for PWA / mobile — same ids as munshi-ui/vault.js COURTS."""
     return {"ok": True, "courts": PUBLIC_COURTS}
 
 
-@router.post("/courts/lookup")
+@router.post("/courts/lookup", response_model=DynamicResponse)
 def case_lookup(body: CaseLookupBody, user=Depends(current_user)):
     """Match a case number on a live cause list when adapter supports it.
 
@@ -38,7 +38,7 @@ def case_lookup(body: CaseLookupBody, user=Depends(current_user)):
     return result
 
 
-@router.post("/courts/sync-hearings")
+@router.post("/courts/sync-hearings", response_model=DynamicResponse)
 def sync_case_hearings(body: SyncHearingsBody, _user=Depends(current_user)):
     """Refresh next-hearing hints for tracked cases (+ optional advocate causelist scan).
 
@@ -54,7 +54,7 @@ def sync_case_hearings(body: SyncHearingsBody, _user=Depends(current_user)):
         raise HTTPException(502, f"could not verify court sources: {exc}") from exc
 
 
-@router.post("/courts/parse-causelist")
+@router.post("/courts/parse-causelist", response_model=DynamicResponse)
 async def parse_uploaded_causelist(
     file: UploadFile = File(...),
     court_id: int = Form(...),

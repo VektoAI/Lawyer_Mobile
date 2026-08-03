@@ -51,3 +51,9 @@ Future<void> patchAccountProfile(
     if (phone != null) 'phone': phone,
   });
 }
+
+/// Permanently deletes the signed-in user's auth account + chamber profile.
+/// Case data is device-only and untouched — see DELETE /api/me.
+Future<void> deleteAccount(ApiClient api) async {
+  await api.delete('/me');
+}
