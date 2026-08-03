@@ -86,6 +86,21 @@ class HearingReminderService {
         body: todayCases.take(3).map((c) => '${c.caseNo} · ${c.parties.split(' ').take(3).join(' ')}').join('\n'),
       );
     }
+    if (tomorrowCases.isNotEmpty) {
+      // Proactively lock in tomorrow's own "morning of" reminder too, rather
+      // than relying on the app being reopened tomorrow before 7:30 AM to
+      // (re)compute it — that reopen is not guaranteed, so without this a
+      // hearing added today for tomorrow would only ever get tonight's
+      // evening heads-up, never a morning-of one. Distinct id from the
+      // above so it doesn't collide with today's own morning slot.
+      final tomorrowMorning = tz.TZDateTime(tz.local, now.year, now.month, now.day, 7, 30).add(const Duration(days: 1));
+      await _schedule(
+        id: 3,
+        when: tomorrowMorning,
+        title: 'Today: ${tomorrowCases.length} hearing(s)',
+        body: tomorrowCases.take(3).map((c) => '${c.caseNo} · ${c.parties.split(' ').take(3).join(' ')}').join('\n'),
+      );
+    }
   }
 
   Future<void> _schedule({
