@@ -61,7 +61,12 @@ class HearingReminderService {
 
     if (tomorrowCases.isNotEmpty) {
       var evening = tz.TZDateTime(tz.local, now.year, now.month, now.day, 19, 0);
-      if (evening.isBefore(now)) evening = evening.add(const Duration(days: 1));
+      // If tonight's 7 PM slot already passed, pushing a full day forward
+      // would land this reminder at 7 PM on the hearing day itself — after
+      // the hearing already happened, making it useless. Fire promptly
+      // instead so a "tomorrow" heads-up set up late in the evening still
+      // arrives before the hearing.
+      if (evening.isBefore(now)) evening = now.add(const Duration(minutes: 1));
       await _schedule(
         id: 1,
         when: evening,
@@ -71,7 +76,9 @@ class HearingReminderService {
     }
     if (todayCases.isNotEmpty) {
       var morning = tz.TZDateTime(tz.local, now.year, now.month, now.day, 7, 30);
-      if (morning.isBefore(now)) morning = morning.add(const Duration(days: 1));
+      // Same reasoning as above: waiting a full day would show a stale
+      // "Today: hearing" reminder tomorrow, a day after it actually happened.
+      if (morning.isBefore(now)) morning = now.add(const Duration(minutes: 1));
       await _schedule(
         id: 2,
         when: morning,
